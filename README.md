@@ -9,7 +9,7 @@ statistik zonal per kecamatan di Kabupaten & Kota Madiun.**
 <img src="https://img.shields.io/badge/Shiny-Web%20App-447099?logo=rstudio&logoColor=white" alt="Shiny">
 <img src="https://img.shields.io/badge/Leaflet-Interactive%20Map-199900?logo=leaflet&logoColor=white" alt="Leaflet">
 <img src="https://img.shields.io/badge/Sentinel--2-Level--2A-1a3d6d" alt="Sentinel-2">
-<img src="https://img.shields.io/badge/License-Academic-lightgrey" alt="License">
+<img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 
 <br>
 
@@ -94,11 +94,14 @@ untuk kawasan terbangun, NDWI untuk badan air, dan NDCI untuk klorofil perairan.
 
 ```
 .
-├─ app.R        # Aplikasi dashboard Shiny (WebGIS)
-├─ tubes.R      # Praproses: hitung indeks + statistik zonal dari citra
-├─ docs/        # Tangkapan layar untuk dokumentasi
-├─ Data/        # (tidak di-commit) data masukan: batas administrasi + citra
-└─ output/      # (sebagian besar tidak di-commit) raster indeks + CSV statistik
+├─ app.R          # Aplikasi dashboard Shiny (WebGIS)
+├─ tubes.R        # Praproses: hitung indeks + statistik zonal dari citra
+├─ docs/          # Tangkapan layar untuk dokumentasi
+├─ README.md      # Dokumentasi proyek
+├─ LICENSE        # Lisensi MIT
+├─ CITATION.cff   # Metadata sitasi
+├─ Data/          # (tidak di-commit) data masukan: batas administrasi + citra
+└─ output/        # (sebagian besar tidak di-commit) raster indeks + CSV statistik
 ```
 
 ## Memulai
@@ -180,4 +183,4 @@ kecamatan) dengan kolom statistik untuk setiap indeks:
 
 ## Lisensi
 
-Proyek ini dibuat untuk keperluan tugas akademik.
+Dirilis di bawah lisensi [MIT](LICENSE).

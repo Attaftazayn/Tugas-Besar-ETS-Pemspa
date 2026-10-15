@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "Jika Anda menggunakan perangkat lunak ini, silakan sitasi sebagai berikut."
+title: "WebGIS Indeks Spektral Kabupaten & Kota Madiun"
+abstract: >-
+  Dashboard WebGIS berbasis R (Shiny + Leaflet) untuk memvisualisasikan indeks
+  spektral Sentinel-2 (NDVI, NDBI, NDWI, NDCI) dan statistik zonal per kecamatan
+  di Kabupaten dan Kota Madiun.
+type: software
+version: 1.0.0
+date-released: "2026-10-15"
+license: MIT
+keywords:
+  - WebGIS
+  - Shiny
+  - Leaflet
+  - remote sensing
+  - Sentinel-2
+  - NDVI
+  - zonal statistics
+authors:
+  - family-names: Attaftazani
+    given-names: Abul Fahmi
+  - family-names: RA
+    given-names: Sabrina Sandra
