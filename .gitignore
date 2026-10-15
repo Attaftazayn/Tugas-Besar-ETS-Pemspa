@@ -1,5 +1,11 @@
+# Abaikan data besar & hasil olahan (raster/citra). Hanya berkas kecil yang
+# disertakan, misalnya tabel statistik zonal ringkas di bawah ini.
 Data/
-output/
+output/*
+!output/Zonal_Statistics_Madiun.csv
+
+# Berkas sesi & konfigurasi R
 .RData
 .Rhistory
-
+.Rproj.user/
+.Rproj
