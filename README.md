@@ -76,7 +76,7 @@ untuk kawasan terbangun, NDWI untuk badan air, dan NDCI untuk klorofil perairan.
 | **NDWI** | Normalized Difference Water Index | Menandai keberadaan badan air: sungai, waduk, kolam, hingga sawah tergenang. |
 | **NDCI** | Normalized Difference Chlorophyll Index | Menaksir klorofil perairan untuk memantau kualitas air; berkas sudah bebas awan. |
 
-## Alat & Teknologi
+## Keterangan
 
 | Kategori | Alat |
 |----------|------|
