@@ -70,12 +70,14 @@ untuk kawasan terbangun, NDWI untuk badan air, dan NDCI untuk klorofil perairan.
 
 ## Indeks Spektral
 
-| Indeks | Nama Lengkap | Deskripsi |
-|:------:|--------------|-----------|
-| **NDVI** | Normalized Difference Vegetation Index | Mengukur kerapatan dan kesehatan vegetasi; nilai tinggi menandakan tutupan hijau rapat. |
-| **NDBI** | Normalized Difference Built-up Index | Menandai lahan terbangun seperti permukiman, kawasan industri, dan jalan. |
-| **NDWI** | Normalized Difference Water Index | Menandai keberadaan badan air: sungai, waduk, kolam, hingga sawah tergenang. |
-| **NDCI** | Normalized Difference Chlorophyll Index | Menaksir klorofil perairan untuk memantau kualitas air; berkas sudah bebas awan. |
+| Indeks | Nama Lengkap | Rumus | Deskripsi |
+|:------:|--------------|-------|-----------|
+| **NDVI** | Normalized Difference Vegetation Index | `(B08 − B04) / (B08 + B04)` | Mengukur kerapatan dan kesehatan vegetasi; nilai tinggi menandakan tutupan hijau rapat. |
+| **NDBI** | Normalized Difference Built-up Index | `(B11 − B08) / (B11 + B08)` | Menandai lahan terbangun seperti permukiman, kawasan industri, dan jalan. |
+| **NDWI** | Normalized Difference Water Index | `(B03 − B08) / (B03 + B08)` | Menandai keberadaan badan air: sungai, waduk, kolam, hingga sawah tergenang. |
+| **NDCI** | Normalized Difference Chlorophyll Index | `(B04 − B08) / (B04 + B08)` | Menaksir klorofil perairan untuk memantau kualitas air dan sebaran alga. |
+
+> B03 = Green, B04 = Red, B08 = NIR, B11 = SWIR (Sentinel-2 Level-2A, 10 m).
 
 ## Keterangan
 
@@ -97,8 +99,12 @@ untuk kawasan terbangun, NDWI untuk badan air, dan NDCI untuk klorofil perairan.
 .
 ├─ app.R          # Aplikasi dashboard Shiny (WebGIS)
 ├─ tubes.R        # Praproses: hitung indeks + statistik zonal dari citra
+├─ utils.R        # Fungsi bantu murni (dipakai app.R & diuji di tests/)
+├─ tests/         # Pengujian unit testthat
 ├─ docs/          # Tangkapan layar untuk dokumentasi
+├─ scripts/       # Script bantu (deployment shinyapps.io)
 ├─ README.md      # Dokumentasi proyek
+├─ CHANGELOG.md   # Riwayat perubahan
 ├─ LICENSE        # Lisensi MIT
 ├─ CITATION.cff   # Metadata sitasi
 ├─ Data/          # (tidak di-commit) data masukan: batas administrasi + citra
@@ -147,6 +153,15 @@ Rscript app.R
 
 > `app.R` menggunakan path relatif (`Data/` dan `output/`). Pastikan folder
 > tersebut tersedia di akar proyek sebelum menjalankan.
+
+### 4. Menjalankan pengujian
+
+Pengujian unit memastikan fungsi bantu (pencarian berkas & pencocokan nama
+kecamatan) berfungsi sebelum aplikasi dijalankan:
+
+```bash
+Rscript tests/testthat.R
+```
 
 ## Sumber Data
 

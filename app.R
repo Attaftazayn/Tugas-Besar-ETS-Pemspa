@@ -23,6 +23,10 @@ library(DT)              # tabel data interaktif
 library(ggplot2)         # grafik batang pada tab statistik
 library(plotly)          # versi interaktif grafik pada tab statistik
 
+# Fungsi bantu murni (cari_file, normalisasi_nama) dipisahkan ke utils.R
+# agar dapat diuji terpisah (lihat tests/).
+source("utils.R")
+
 
 # =============================================================================
 # 2. KONFIGURASI PATH & METADATA INDEKS
@@ -37,23 +41,14 @@ library(plotly)          # versi interaktif grafik pada tab statistik
 folder_data   <- "Data"
 folder_output <- "output"
 
-# Fungsi bantu: mencari satu file di dalam folder berdasarkan pola nama.
-# ignore.case = TRUE membuat pencarian tidak terpengaruh huruf besar/kecil
-# (misalnya "NDCI_Cloud_Madiun.tif" tetap ketemu walaupun ditulis lain).
-cari_file <- function(folder, pola) {
-  hasil <- list.files(folder, pattern = pola, full.names = TRUE,
-                      ignore.case = TRUE)
-  hasil <- hasil[!dir.exists(hasil)]          # abaikan nama folder
-  if (length(hasil) == 0) return(NA_character_)
-  hasil[1]
-}
+# cari_file() didefinisikan di utils.R (di-source di atas).
 
 # Nama file batas administrasi & tabel statistik zonal
 file_batas <- cari_file(folder_data, "^batas")
 file_zonal <- cari_file(folder_output, "^Zonal_Statistics_Madiun\\.csv$")
 
 # Metadata tiap indeks: nama file, label, palet peta, warna aksen (untuk chip
-# & grafik), sebutan singkat, serta penjelasan bahasa awam di tab Panduan.
+# & grafik), sebutan singkat, serta penjelasan bahasa awam pada modal "Tentang".
 # Untuk menambah indeks lain cukup tambahkan satu baris di sini.
 meta_indeks <- list(
   NDVI = list(file = "NDVI_madiun.tif",
@@ -272,7 +267,7 @@ zonal_stats <- read.csv(file_zonal, stringsAsFactors = FALSE)
 # nilai statistiknya NA dan ditampilkan sebagai "n.a.".
 # =============================================================================
 
-normalisasi_nama <- function(x) tolower(trimws(x))
+# normalisasi_nama() didefinisikan di utils.R (di-source di atas).
 
 kolom_stat <- c("NDVI_Mean", "NDVI_Minimum", "NDVI_Maximum", "NDVI_Median",
                 "NDBI_Mean", "NDBI_Minimum", "NDBI_Maximum", "NDBI_Median",
