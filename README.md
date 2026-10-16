@@ -16,7 +16,7 @@ statistik zonal per kecamatan di Kabupaten & Kota Madiun.**
 <a href="docs/preview-peta.png">Peta</a> ·
 <a href="docs/preview-statistik.png">Statistik Zonal</a> ·
 <a href="#-memulai">Menjalankan</a> ·
-<a href="#-alat--teknologi">Keterangan</a>
+<a href="#keterangan">Keterangan</a>
 
 </div>
 
@@ -36,7 +36,7 @@ untuk kawasan terbangun, NDWI untuk badan air, dan NDCI untuk klorofil perairan.
 - [Tangkapan Layar](#-tangkapan-layar)
 - [Fitur](#-fitur)
 - [Indeks Spektral](#-indeks-spektral)
-- [Alat & Teknologi](#-alat--teknologi)
+- [Keterangan](#keterangan)
 - [Struktur Proyek](#-struktur-proyek)
 - [Memulai](#-memulai)
 - [Sumber Data](#-sumber-data)
