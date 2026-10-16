@@ -1,7 +1,6 @@
 # ====================================
 # 1. PENGATURAN PROJ
 # ====================================
-
 Sys.unsetenv("PROJ_LIB")
 Sys.unsetenv("PROJ_DATA")
 Sys.unsetenv("GDAL_DATA")
@@ -81,17 +80,23 @@ madiun <- st_read(
   "C:/SEMESTER 5/PEMSPA/TUBES ETS/Data/batas madiun"
 )
 
-# Menampilkan data atribut
-print(madiun)
+# Memilih Kabupaten dan Kota Madiun
+madiun <- madiun %>%
+  filter(as.character(kode_kk) %in%
+           c("35.19", "35.77"))
 
-# Melihat sistem koordinat
-st_crs(madiun)
+# Memperbaiki geometri
+madiun <- st_make_valid(madiun)
+
+# Memeriksa wilayah
+print(table(madiun$kode_kk))
 
 # Menampilkan batas wilayah
-plot(st_geometry(madiun))
-
-
-# ====================================
+plot(
+  st_geometry(madiun),
+  main = "Kabupaten dan Kota Madiun"
+)
+#========================
 # 8. MENYAMAKAN RESOLUSI
 # ====================================
 
@@ -125,17 +130,37 @@ print(citra)
 # 10. MENYAMAKAN KOORDINAT BATAS
 # ====================================
 
-# Mengubah sf menjadi SpatVector
-batas <- vect(madiun)
+# Menetapkan CRS asli citra Sentinel-2
+terra::crs(citra) <- "EPSG:32749"
 
-# Menyamakan CRS dengan citra
-batas <- project(
+# Memeriksa CRS citra
+print(terra::crs(citra))
+
+# Mengubah batas administrasi menjadi SpatVector
+batas <- terra::vect(madiun)
+
+# Menyamakan CRS batas dengan citra
+batas <- terra::project(
   batas,
-  crs(citra)
+  terra::crs(citra)
 )
 
-# Menampilkan batas wilayah
-plot(batas)
+# Memeriksa CRS batas
+print(terra::crs(batas))
+
+# Menampilkan citra
+plot(
+  citra$B04,
+  main = "Citra Sentinel-2 Kabupaten Madiun"
+)
+
+# Menampilkan batas Kabupaten Madiun
+plot(
+  batas,
+  add = TRUE,
+  border = "red",
+  col = NA
+)
 
 # ====================================
 # 11. CROP DAN MASK
@@ -256,45 +281,33 @@ writeRaster(
 
 # ====================================
 
-# Membaca SCL resolusi 20 meter
-SCL <- ambil_band("SCL_20m")
+# Mengambil band Red dan NIR
+Red <- citra_mask$B04
+NIR <- citra_mask$B08
 
-# Menyamakan grid dengan citra
-SCL_new <- resample(
-  SCL,
-  B11,
-  method = "near"
+# Menghitung indeks ternormalisasi
+NDCI <- terra::ifel(
+  (NIR + Red) == 0,
+  NA,
+  (NIR - Red) / (NIR + Red)
 )
 
-# Crop dan mask wilayah Lamongan
-SCL_crop <- crop(SCL_new, batas)
-SCL_mask <- mask(SCL_crop, batas)
-
-# Menampilkan SCL
-plot(
-  SCL_mask,
-  main = "Scene Classification Layer madiun"
-)
-# Mengidentifikasi awan
-AWAN <- ifel(
-  SCL_mask %in% c(8, 9, 10),
-  1,
-  0
-)
-
-names(AWAN) <- "AWAN"
+# Memberikan nama raster
+names(NDCI) <- "NDCI"
 
 # Menampilkan hasil
 plot(
-  AWAN,
-  col = c("white", "gray40"),
-  main = "Peta Sebaran Awan Madiun"
+  NDCI,
+  col = colorRampPalette(
+    c("steelblue4", "lightblue", "white", "gray70")
+  )(100),
+  main = "Indeks Red-NIR Kabupaten Madiun"
 )
 
 # Menyimpan hasil
 writeRaster(
-  AWAN,
-  "output/AWAN_Madiun.tif",
+  NDCI,
+  "output/NDCI_Cloud_Madiun.tif",
   overwrite = TRUE
 )
 # ====================================
@@ -322,10 +335,13 @@ plot(NDWI,
      col = hcl.colors(100, "Blues 3"),
      main = "NDWI - Perairan")
 
-plot(AWAN,
-     col = c("white", "gray40"),
-     breaks = c(-0.5, 0.5, 1.5),
-     main = "Sebaran Awan")
+plot(
+  NDCI,
+  col = colorRampPalette(
+    c("steelblue4", "lightblue", "white", "gray70")
+  )(100),
+  main = "NDCI Cloud Index Kabupaten Madiun"
+)
 
 dev.off()
 par(mfrow = c(1, 1))
@@ -358,34 +374,30 @@ plot(
   main = "NDWI - Perairan"
 )
 
-# Peta AWAN
+# Peta 4: NDCI - Awan
 plot(
-  AWAN,
-  col = c("white", "gray40"),
-  breaks = c(-0.5, 0.5, 1.5),
-  main = "Sebaran Awan"
+  NDCI,
+  col = colorRampPalette(
+    c("steelblue4", "lightblue", "white", "gray70")
+  )(100),
+  main = "NDCI - Cloud Index"
 )
 
 # Mengembalikan tampilan normal
 par(mfrow = c(1, 1))
 
 # ====================================
-# 20. MEMERIKSA DATA KECAMATAN
+# 20. MEMBACA BATAS KECAMATAN MADIUN
 # ====================================
 
-# Membaca ulang GeoJSON agar mulai dari data asli
 kecamatan <- st_read(
   "C:/SEMESTER 5/PEMSPA/TUBES ETS/Data/batas madiun"
 )
 
-# Memeriksa jumlah data
-print(nrow(kecamatan))
-
-# Memeriksa nama kolom
-print(names(kecamatan))
-
-# Memeriksa geometri kosong
-print(sum(st_is_empty(kecamatan)))
+# Memilih Kabupaten dan Kota Madiun
+kecamatan <- kecamatan %>%
+  filter(as.character(kode_kk) %in%
+           c("35.19", "35.77"))
 
 # Menghapus geometri kosong
 kecamatan <- kecamatan[
@@ -393,79 +405,80 @@ kecamatan <- kecamatan[
   drop = FALSE
 ]
 
-# Memperbaiki geometri tidak valid
+# Memperbaiki geometri
 kecamatan <- st_make_valid(kecamatan)
 
-# Memeriksa jumlah data setelah dibersihkan
+# ====================================
+# 21. MENGGABUNGKAN POLIGON KECAMATAN
+# ====================================
+
+kecamatan <- kecamatan %>%
+  group_by(kode_kk, kecamatan) %>%
+  summarise(.groups = "drop")
+
+# Memeriksa nama kecamatan
+print(kecamatan$kecamatan)
+
+# Memeriksa jumlah kecamatan
 print(nrow(kecamatan))
 
-# Memeriksa validitas geometri
-print(table(st_is_valid(kecamatan)))
-
-# Menampilkan batas kecamatan
-plot(
-  st_geometry(kecamatan),
-  main = "Batas Kecamatan Madiun"
-)
-# ====================================
-# 21. MEMBERSIHKAN DATA KECAMATAN
-# ====================================
-
-# Menghapus geometri kosong
-kecamatan <- kecamatan[
-  !st_is_empty(kecamatan),
-]
-
-# Memperbaiki geometri tidak valid
-kecamatan <- st_make_valid(kecamatan)
-
-# Memeriksa kembali jumlah wilayah
-nrow(kecamatan)
-
-# Menampilkan hasil
-plot(
-  st_geometry(kecamatan),
-  main = "Batas Kecamatan Kabupaten Madiun"
-)
-
+# Memeriksa jumlah berdasarkan wilayah
+print(table(kecamatan$kode_kk))
 # ====================================
 # 22. MENYAMAKAN CRS
 # ====================================
 
-# Mengubah sf menjadi SpatVector
-kec <- vect(kecamatan)
+kecamatan <- st_transform(
+  kecamatan,
+  crs(NDVI)
+)
 
-# Menyamakan sistem koordinat
-kec <- project(kec, crs(NDVI))
+kec <- terra::vect(kecamatan)
 
-# Melihat hasil
-plot(kec)
-
+plot(
+  kec,
+  main = "Batas Kecamatan Kabupaten Madiun"
+)
 # ====================================
-# 23. MENYIAPKAN RASTER
+# 23. MENYIAPKAN RASTER ZONAL STATISTICS
 # ====================================
 
-# Menyamakan grid raster awan
-if (!same.crs(AWAN, NDVI)) {
-  AWAN_fix <- project(AWAN, NDVI, method = "near")
+# Memastikan NDCI memiliki grid yang sama dengan NDVI
+if (!same.crs(NDCI, NDVI)) {
+  NDCI_fix <- project(
+    NDCI,
+    NDVI,
+    method = "bilinear"
+  )
 } else {
-  AWAN_fix <- resample(AWAN, NDVI, method = "near")
+  NDCI_fix <- resample(
+    NDCI,
+    NDVI,
+    method = "bilinear"
+  )
 }
 
-# Menggabungkan raster
+# Menggabungkan empat indeks
 indeks_zonal <- c(
   NDVI,
   NDBI,
   NDWI,
-  AWAN_fix
+  NDCI_fix
 )
 
+# Memberikan nama setiap indeks
 names(indeks_zonal) <- c(
   "NDVI",
   "NDBI",
   "NDWI",
-  "AWAN"
+  "NDCI"
 )
+
+# Memeriksa hasil
+print(indeks_zonal)
+
+# Menampilkan keempat indeks
+plot(indeks_zonal)
 # ====================================
 # 24. MENGHITUNG ZONAL STATISTICS
 # ====================================
@@ -512,7 +525,4 @@ write.csv(
   "output/Zonal_Statistics_Madiun.csv",
   row.names = FALSE
 )
-
-# Memastikan file tersimpan
-file.exists("output/Zonal_Statistics_Madiun.csv")
 

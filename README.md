@@ -61,6 +61,7 @@ untuk kawasan terbangun, NDWI untuk badan air, dan NDCI untuk klorofil perairan.
   mandiri tanpa mengganggu indeks.
 - **Popup nilai per kecamatan** dan **sorotan wilayah** langsung dari peta.
 - **Statistik zonal interaktif**:
+  - Filter **wilayah**: Kota Madiun, Kabupaten Madiun, atau semua wilayah.
   - Grafik peringkat kecamatan (hover & zoom) berbasis Plotly.
   - Slider untuk menyaring kecamatan berdasarkan rentang nilai rata-rata.
   - Tabel rinci yang dapat diurutkan, dicari, dan dipaginasi (DT).
@@ -155,8 +156,9 @@ Rscript app.R
 
 ## Keluaran
 
-`output/Zonal_Statistics_Madiun.csv` berisi satu baris per kecamatan (15
-kecamatan) dengan kolom statistik untuk setiap indeks:
+`output/Zonal_Statistics_Madiun.csv` berisi satu baris per kecamatan (18
+kecamatan: 15 di Kabupaten Madiun dan 3 di Kota Madiun) dengan kolom statistik
+untuk setiap indeks:
 
 | Kolom | Keterangan |
 |-------|------------|

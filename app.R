@@ -639,9 +639,10 @@ ui <- dashboardPage(
             ),
             selectInput(
               "pilih_wilayah", "Wilayah",
-              choices = c("Semua wilayah" = "Semua",
-                          setNames(sort(unique(zonal_rapi$Wilayah)),
-                                   sort(unique(zonal_rapi$Wilayah))))
+              choices = c("Semua wilayah"    = "Semua",
+                          "Kota Madiun"      = "Kota Madiun",
+                          "Kabupaten Madiun" = "Kabupaten Madiun"),
+              selected = "Semua"
             ),
             sliderInput(
               "rentang_nilai", "Saring nilai rata-rata",
