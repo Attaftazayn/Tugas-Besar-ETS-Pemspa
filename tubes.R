@@ -285,11 +285,12 @@ writeRaster(
 Red <- citra_mask$B04
 NIR <- citra_mask$B08
 
-# Menghitung indeks ternormalisasi
+# Menghitung NDCI (Normalized Difference Chlorophyll Index)
+# Rumus: (Red - NIR) / (Red + NIR)
 NDCI <- terra::ifel(
-  (NIR + Red) == 0,
+  (Red + NIR) == 0,
   NA,
-  (NIR - Red) / (NIR + Red)
+  (Red - NIR) / (Red + NIR)
 )
 
 # Memberikan nama raster

@@ -1002,6 +1002,7 @@ server <- function(input, output, session) {
       e,
       x = ~nilai, y = ~Kecamatan,
       type = "bar", orientation = "h",
+      source = "zonal",
       customdata = ~Kecamatan,
       marker = list(color = palet_aksen[[pr]]),
       text = sprintf("%.3f", e$nilai),
@@ -1025,12 +1026,28 @@ server <- function(input, output, session) {
   })
 
   # Klik grafik -> sorot kecamatan di peta + pilih baris tabelnya
-  observeEvent(event_data("plotly_click"), {
-    dat <- event_data("plotly_click")
+  # (baca input langsung agar tidak bergantung pada registrasi event_data)
+  observeEvent(input[["plotly_click-zonal"]], {
+    dat <- input[["plotly_click-zonal"]]
     if (is.null(dat)) return()
-    kec <- as.character(dat$y)
-    if (length(kec) == 0 || is.na(kec) || !nzchar(kec))
-      kec <- as.character(dat$customdata)
+    # plotly mengirim event sebagai string JSON -> parse dulu
+    if (is.character(dat)) {
+      dat <- tryCatch(jsonlite::fromJSON(paste(dat, collapse = "")),
+                      error = function(e) NULL)
+      if (is.null(dat)) return()
+    }
+    # normalisasi ke satu record (bisa data.frame atau list)
+    rec <- if (is.data.frame(dat)) {
+      if (nrow(dat) == 0) return()
+      as.list(dat[1, , drop = FALSE])
+    } else if (is.list(dat) && length(dat) >= 1) {
+      dat[[1]]
+    } else {
+      return()
+    }
+    kec <- as.character(rec$y)[1]
+    if (is.na(kec) || !nzchar(kec)) kec <- as.character(rec$customdata)[1]
+    if (is.na(kec) || !nzchar(kec)) return()
     sorot_kecamatan(kec)
     ti <- tabel_isi()
     i  <- match(kec, ti$Kecamatan)
@@ -1074,8 +1091,8 @@ server <- function(input, output, session) {
         paste("Nilai", meta_indeks[[pr]]$label, "untuk", nrow(tampil), "kecamatan.")
       ),
       options = list(
-        pageLength = 10,
-        lengthMenu = c(5, 10, 25, 50),
+        pageLength = 25,
+        lengthMenu = c(10, 25, 50),
         dom        = "lBfrtip",
         order      = list(list(2, "desc")),
         columnDefs = list(list(className = "dt-center", targets = 1:6)),
