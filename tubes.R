@@ -285,7 +285,7 @@ writeRaster(
 Red <- citra_mask$B04
 NIR <- citra_mask$B08
 
-# Menghitung NDCI (Normalized Difference Chlorophyll Index)
+# Menghitung NDCI (Normalized Difference Cloud Index)
 # Rumus: (Red - NIR) / (Red + NIR)
 NDCI <- terra::ifel(
   (Red + NIR) == 0,

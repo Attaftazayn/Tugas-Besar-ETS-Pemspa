@@ -13,8 +13,10 @@ statistik zonal per kecamatan di Kabupaten & Kota Madiun.**
 
 <br>
 
-<a href="docs/preview-peta.png">Peta</a> ·
-<a href="docs/preview-statistik.png">Statistik Zonal</a> ·
+<a href="docs/01_peta_ndvi.png">Peta</a> ·
+<a href="docs/05_popup_kecamatan.png">Popup</a> ·
+<a href="docs/06_tab_statistik.png">Statistik Zonal</a> ·
+<a href="docs/08_tampilan_ponsel.png">Ponsel</a> ·
 <a href="#-memulai">Menjalankan</a> ·
 <a href="#keterangan">Keterangan</a>
 
@@ -29,7 +31,7 @@ dijelajahi langsung di peta, dilengkapi **statistik zonal per kecamatan** untuk
 membandingkan wilayah secara objektif.
 
 Hasil olahan indeks menampilkan pola tutupan lahan: NDVI untuk vegetasi, NDBI
-untuk kawasan terbangun, NDWI untuk badan air, dan NDCI untuk klorofil perairan.
+untuk kawasan terbangun, NDWI untuk badan air, dan NDCI untuk menandai awan.
 
 ## Daftar Isi
 
@@ -46,15 +48,33 @@ untuk kawasan terbangun, NDWI untuk badan air, dan NDCI untuk klorofil perairan.
 
 ## Tangkapan Layar
 
-| Peta Interaktif | Statistik Zonal |
+Tab **Peta Interaktif** menampilkan empat indeks spektral yang dapat dinyalakan
+satu per satu, masing-masing dengan palet warnanya sendiri.
+
+| NDVI — vegetasi | NDBI — lahan terbangun |
 |:---:|:---:|
-| ![Peta indeks spektral](docs/preview-peta.png) | ![Statistik zonal](docs/preview-statistik.png) |
-| Peta indeks spektral dengan kontrol basemap, indeks, dan batas wilayah | Grafik peringkat kecamatan (interaktif) dan tabel rinci |
+| ![Peta NDVI](docs/01_peta_ndvi.png) | ![Peta NDBI](docs/02_peta_ndbi.png) |
+
+| NDWI — perairan | NDCI — awan |
+|:---:|:---:|
+| ![Peta NDWI](docs/03_peta_ndwi.png) | ![Peta NDCI](docs/04_peta_ndci.png) |
+
+Popup nilai per kecamatan, tab **Statistik Zonal**, jendela **Tentang**, serta
+tampilan pada perangkat bergerak:
+
+| Popup kecamatan | Tab Statistik Zonal |
+|:---:|:---:|
+| ![Popup kecamatan](docs/05_popup_kecamatan.png) | ![Statistik zonal](docs/06_tab_statistik.png) |
+
+| Jendela Tentang | Tampilan ponsel |
+|:---:|:---:|
+| ![Jendela Tentang](docs/07_modal_tentang.png) | ![Tampilan ponsel](docs/08_tampilan_ponsel.png) |
 
 ## Fitur
 
-- **Peta interaktif berbasis Leaflet** dengan pilihan basemap: Citra satelit,
-  OpenStreetMap, dan Topografi.
+- **Peta interaktif berbasis Leaflet** dengan enam pilihan basemap: empat varian
+  CARTO (Positron & Dark Matter, dengan/tanpa label), OpenStreetMap, dan citra
+  satelit Esri World Imagery.
 - **Empat indeks spektral** yang dapat dinyalakan satu per satu (NDVI, NDBI,
   NDWI, NDCI) dengan palet warna berbeda.
 - **Overlay batas & nama kecamatan** yang dapat dinyalakan/dimatikan secara
@@ -75,7 +95,7 @@ untuk kawasan terbangun, NDWI untuk badan air, dan NDCI untuk klorofil perairan.
 | **NDVI** | Normalized Difference Vegetation Index | `(B08 − B04) / (B08 + B04)` | Mengukur kerapatan dan kesehatan vegetasi; nilai tinggi menandakan tutupan hijau rapat. |
 | **NDBI** | Normalized Difference Built-up Index | `(B11 − B08) / (B11 + B08)` | Menandai lahan terbangun seperti permukiman, kawasan industri, dan jalan. |
 | **NDWI** | Normalized Difference Water Index | `(B03 − B08) / (B03 + B08)` | Menandai keberadaan badan air: sungai, waduk, kolam, hingga sawah tergenang. |
-| **NDCI** | Normalized Difference Chlorophyll Index | `(B04 − B08) / (B04 + B08)` | Menaksir klorofil perairan untuk memantau kualitas air dan sebaran alga. |
+| **NDCI** | Normalized Difference Cloud Index | `(B04 − B08) / (B04 + B08)` | Menandai keberadaan awan pada citra sehingga tutupan awan dapat dipisahkan dari daratan dan perairan. |
 
 > B03 = Green, B04 = Red, B08 = NIR, B11 = SWIR (Sentinel-2 Level-2A, 10 m).
 
@@ -101,7 +121,7 @@ untuk kawasan terbangun, NDWI untuk badan air, dan NDCI untuk klorofil perairan.
 ├─ tubes.R        # Praproses: hitung indeks + statistik zonal dari citra
 ├─ utils.R        # Fungsi bantu murni (dipakai app.R & diuji di tests/)
 ├─ tests/         # Pengujian unit testthat
-├─ docs/          # Tangkapan layar untuk dokumentasi
+├─ docs/          # Tangkapan layar lengkap (8 gambar) untuk dokumentasi
 ├─ scripts/       # Script bantu (deployment shinyapps.io)
 ├─ README.md      # Dokumentasi proyek
 ├─ CHANGELOG.md   # Riwayat perubahan

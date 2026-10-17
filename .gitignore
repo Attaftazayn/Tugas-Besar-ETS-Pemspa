@@ -9,3 +9,10 @@ output/*
 .Rhistory
 .Rproj.user/
 .Rproj
+
+# Dokumen laporan (di luar cakupan repositori proyek ini)
+Bab3_Metodologi_WebGIS.Rmd
+Bab3_Metodologi_WebGIS.docx
+Bab3_Metodologi_WebGIS.html
+Bab4/
+metodologi_webgis.docx
