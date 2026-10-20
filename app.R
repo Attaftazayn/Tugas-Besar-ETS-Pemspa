@@ -257,15 +257,13 @@ rentang_indeks <- lapply(raster_indeks, function(r) {
 # Objek palet Leaflet (colorNumeric). Palet dibuat sebagai FUNGSI agar
 # addRasterImage memakai domain ini, bukan domain otomatis dari data.
 # Warna transparan (#00000000) dipakai untuk piksel NA (di luar batas wilayah).
-# reverse=TRUE agar warna gelap = nilai indeks tertinggi (sesuai permintaan)
 palet_indeks <- Map(
   f = function(nama, rentang) {
     colorNumeric(
       palette  = meta_indeks[[nama]]$palet,
       domain   = rentang,
       na.color = "#00000000",
-      alpha    = TRUE,
-      reverse  = TRUE
+      alpha    = TRUE
     )
   },
   nama    = names(raster_indeks),
@@ -1000,11 +998,11 @@ server <- function(input, output, session) {
       proxy %>% addLegend(
         position  = "bottomright",
         pal       = palet_indeks[[acuan]],
-        values    = rentang_indeks[[acuan]],
+        values    = rev(rentang_indeks[[acuan]]),
         title     = meta_indeks[[acuan]]$label,
         labFormat = labelFormat(digits = 2),
         opacity   = 0.9,
-        decreasing = FALSE
+        decreasing = TRUE
       )
     }
 

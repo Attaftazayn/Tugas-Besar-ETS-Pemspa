@@ -300,7 +300,7 @@ names(NDCI) <- "NDCI"
 plot(
   NDCI,
   col = colorRampPalette(
-    rev(c("steelblue4", "lightblue", "white", "gray70"))
+    c("steelblue4", "lightblue", "white", "gray70")
   )(100),
   main = "Indeks Red-NIR Kabupaten Madiun"
 )
@@ -339,7 +339,7 @@ plot(NDWI,
 plot(
   NDCI,
   col = colorRampPalette(
-    rev(c("steelblue4", "lightblue", "white", "gray70"))
+    c("steelblue4", "lightblue", "white", "gray70")
   )(100),
   main = "NDCI Cloud Index Kabupaten Madiun"
 )
@@ -379,7 +379,7 @@ plot(
 plot(
   NDCI,
   col = colorRampPalette(
-    rev(c("steelblue4", "lightblue", "white", "gray70"))
+    c("steelblue4", "lightblue", "white", "gray70")
   )(100),
   main = "NDCI - Cloud Index"
 )
