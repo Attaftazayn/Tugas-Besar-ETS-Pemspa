@@ -1,0 +1,412 @@
+---
+title: "Penjelasan Kode `app.R` untuk Presentasi WebGIS"
+author: "Kelompok WebGIS - Kabupaten & Kota Madiun"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: readable
+  pdf_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE, message = FALSE, warning = FALSE)
+```
+
+# Tujuan
+
+Dokumen ini menjelaskan secara garis besar kode di `app.R` untuk keperluan presentasi. Tujuannya adalah menjabarkan **langkah-langkah membangun dashboard WebGIS** ini, mulai dari persiapan hingga menampilkan peta dan citra.
+
+Perbedaan singkat:
+- `tubes.R` → berisi **pra-pemrosesan citra Sentinel-2**: menghitung indeks spektral (NDVI, NDBI, NDWI, NDCI), ekstraksi statistik zonal per kecamatan, menghasilkan raster `.tif` dan `output/Zonal_Statistics_Madiun.csv`.
+- `app.R` → berisi **aplikasi interaktif Shiny + shinydashboard + leaflet** untuk menampilkan peta, citra indeks, batas administrasi, statistik zonal, dan interaksi pengguna.
+
+# 1. Memanggil Paket dan Fungsi Pendukung
+
+Bagian paling awal `app.R` memuat paket-paket yang dibutuhkan dan sumber `utils.R`.
+
+```r
+# Paket utama
+library(shiny)
+library(shinydashboard)
+library(leaflet)
+library(sf)
+library(raster)
+library(terra)
+library(DT)
+library(ggplot2)
+library(plotly)
+library(leaflet.extras)
+library(dplyr)
+
+# Fungsi bantu murni
+source("utils.R")
+```
+
+- `shiny` + `shinydashboard` → kerangka dashboard
+- `leaflet` → peta interaktif
+- `sf`, `raster`, `terra` → pengolahan spasial (vektor & raster)
+- `DT`, `ggplot2`, `plotly` → tabel & grafik interaktif
+- `utils.R` → berisi fungsi kecil seperti `cari_file()` dan `normalisasi_nama()` yang dipakai ulang di `app.R`
+
+# 2. Metadata Indeks Spektral
+
+## 2.1 Definisi meta indeks
+
+`meta_indeks` berisi informasi tiap indeks: singkatan, label lengkap, file raster, warna aksen (untuk chip di header), dsb.
+
+```r
+meta_indeks <- list(
+  NDVI = list(
+    singkat = "Vegetasi",
+    label   = "NDVI - Vegetasi",
+    file    = "NDVI_madiun.tif",
+    deskripsi = "Normalized Difference Vegetation Index",
+    aksen   = "#2ca25f",
+    rumus   = "(B08 − B04) / (B08 + B04)",
+    keterangan = "Mengukur kerapatan & kesehatan vegetasi"
+  ),
+  ...
+  NDCI = list(
+    singkat = "Awan",
+    label   = "NDCI - Indeks Awan",
+    ...
+    rumus   = "(B04 − B08) / (B04 + B08)",
+    keterangan = "Menandai keberadaan awan"
+  )
+)
+```
+
+> **Catatan:** NDCI didefinisikan sebagai `(B04 - B08)/(B04 + B08)`. Secara matematis identik dengan `-NDVI` untuk kombinasi band yang sama, namun di aplikasi ini diposisikan sebagai indikator awan untuk keperluan visualisasi.
+
+## 2.2 Mode Klasifikasi (Kelas)
+
+Agar lebih mudah dibaca saat presentasi, aplikasi menyediakan **mode kelas**. Nilai kontinu dipecah jadi 4 kelas.
+
+```r
+kelas_indeks <- list(
+  NDVI = list(
+    batas = c(-1, 0.2, 0.4, 0.6, 1),
+    label = c("Non-vegetasi (< 0,2)", "Vegetasi jarang (0,2 - 0,4)",
+              "Vegetasi sedang (0,4 - 0,6)", "Vegetasi rapat (> 0,6)"),
+    warna = c("#d73027", "#f4a300", "#a6d96a", "#1a9641")
+  ),
+  ...
+  NDCI = list(
+    batas = c(-1, -0.5, -0.3, -0.1, 1),
+    label = c("Awan sangat rendah (< -0,5)", "Awan rendah (-0,5 - -0,3)",
+              "Awan sedang (-0,3 - -0,1)", "Awan tinggi (> -0,1)"),
+    warna = c("#fff7bc", "#a1dab4", "#41b6c4", "#0c2c84")
+  )
+)
+```
+
+Dari sini dibuat `palet_kelas` berbentuk `colorBin()` (legenda kategori tegas), sedangkan mode normal memakai `palet_indeks` berbentuk `colorNumeric()` (gradasi kontinu).
+
+## 2.3 Memuat Raster & Data Vektor
+
+Raster indeks dibaca dengan `raster::raster()` dan disimpan dalam `raster_indeks`. Batas administrasi dibaca dengan `sf::read_sf()`.
+
+```r
+folder_output <- "output"
+file_indeks <- vapply(meta_indeks, function(m) cari_file(folder_output, paste0("^", gsub("\\.", "\\\\.", m$file), "$")), character(1))
+raster_indeks <- lapply(file_indeks, raster)
+
+batas <- read_sf("Data/batas madiun") %>% st_transform(crs = 4326)
+batas <- batas[!is.na(batas$Kecamatan) & nzchar(batas$Kecamatan), ]
+batas <- batas[!(batas$LuasKm2 < 1e-9 & !grepl("Taman|Kartoharjo|Manguharjo", batas$Kecamatan)), ]
+batas <- st_simplify(batas, dTolerance = 10, preserveTopology = TRUE)
+```
+
+- `st_transform(crs = 4326)` → menyesuaikan ke WGS84 (format yang dipakai Leaflet)
+- Penyaringan fitur berluas sangat kecil → mengurangi artefak saat render
+- `st_simplify` → memperingan render tanpa mengubah bentuk secara drastis
+
+## 2.4 Basemap CARTO
+
+Aplikasi memakai **CARTO Basemaps** (CartoDB) sebagai salah satu pilihan basemap.
+
+```r
+atrib_carto <- "&copy; <a href='https://www.openstreetmap.org/copyright'>OSM</a> &copy; <a href='https://carto.com/attributions'>CARTO</a>"
+url_carto <- function(style) sprintf("https://%s.basemaps.cartocdn.com/%s/{z}/{x}/{y}{r}.png", "a", style)
+
+carto_style <- c(
+  "CARTO Positron"                = "light_all",
+  "CARTO Positron Tanpa Label"    = "light_nolabels",
+  "CARTO Dark Matter"             = "dark_all",
+  "CARTO Dark Matter Tanpa Label" = "dark_nolabels"
+)
+grup_basemap <- c(names(carto_style), "OpenStreetMap", "Esri World Imagery")
+```
+
+Kemudian dipanggil di Leaflet via `addTiles(urlTemplate = url_carto(...), group = grup_bm, attribution = atrib_carto)`. Inilah yang dimaksud "menggunakan plugin CARTO untuk basemap".
+
+# 3. User Interface (UI)
+
+UI dibangun dengan `shinydashboard::dashboardPage`.
+
+## 3.1 Header
+
+```r
+dashboardHeader(title = "WebGIS Indeks Spektral Madiun", titleWidth = 380)
+```
+
+Di header juga ditampilkan **chip** berisi singkatan tiap indeks beserta warna aksen (bagian `lapply(names(meta_indeks), ...)` dengan `m$aksen`).
+
+## 3.2 Sidebar
+
+Sidebar berisi menu navigasi (`sidebarMenu`) dengan dua tab: **Peta Interaktif** dan **Statistik Zonal**.
+
+```r
+dashboardSidebar(
+  width = 240,
+  sidebarMenu(
+    id = "sidebar",
+    menuItem("Peta Interaktif", tabName = "peta", icon = icon("map")),
+    menuItem("Statistik Zonal", tabName = "statistik", icon = icon("chart-bar"))
+  )
+)
+```
+
+## 3.3 Body
+
+Body terdiri dari `tabItems` dengan dua `tabItem`.
+
+### Tab 1: Peta Interaktif
+
+Struktur kuncinya:
+- Judul & deskripsi singkat
+- Chip bar (menegaskan 4 indeks: Vegetasi, Bangunan, Perairan, Awan)
+- Toolbar berisi `checkboxInput("tampilkan_kelas", "Tampilkan sebagai kelas (klasifikasi)", value = FALSE)`
+- Kartu peta: `leafletOutput("peta", height = "100%")`
+
+```r
+tabItem(tabName = "peta",
+  tags$div(class = "page-head", ...),
+  tags$div(class = "chip-row", lapply(..., function(k){ m <- meta_indeks[[k]]; tags$span(class="chip", tags$span(class="dot", style=paste0("background:", m$aksen)), m$singkat) })),
+  tags$div(class = "map-toolbar", checkboxInput("tampilkan_kelas", ...), tags$span(class="help-mini", "...")),
+  tags$div(class = "map-card", leafletOutput("peta", height = "100%"))
+)
+```
+
+### Tab 2: Statistik Zonal
+
+Menampilkan KPI (`valueBoxOutput`), grafik Plotly (`plotlyOutput`), slider filter rentang nilai, serta tabel DT (`DT::dataTableOutput`).
+
+```r
+tabItem(tabName = "statistik",
+  fluidRow(valueBoxOutput("kpi_rata", width=3), valueBoxOutput("kpi_tinggi", width=3), valueBoxOutput("kpi_rendah", width=3), valueBoxOutput("kpi_jumlah", width=3)),
+  fluidRow(box(title="Peringkat Kecamatan per Indeks", width=6, plotlyOutput("plot_peringkat", height=420)),
+           box(title="Filter Rentang Nilai Rata-rata", width=6, sliderInput("slider_rentang", ..., min=..., max=..., value=c(...,...)))),
+  fluidRow(box(title="Tabel Statistik Zonal", width=12, DT::dataTableOutput("tabel_statistik")))
+)
+```
+
+## 3.4 Custom CSS (mengganti warna tampilan)
+
+Di dalam `dashboardBody` dipasang `tags$head` berisi CSS kustom. Di sinilah "mengganti warna dashboard" dilakukan secara langsung.
+
+```r
+dashboardBody(
+  tags$head(
+    tags$style(HTML("
+      :root { --brand:#1f7a8c; --brand-2:#3fbfbf; --bg:#f7f9fc; }
+      .skin-blue .main-header .logo { background-color: var(--brand); color:#fff; font-weight:600; }
+      .skin-blue .main-header .navbar { background-color: var(--brand); }
+      .skin-blue .main-sidebar { background-color: #0f3d56; }
+      .content-wrapper, .right-side { background-color: var(--bg); }
+      .page-head h2 { color: var(--brand); }
+      .chip { display:inline-flex; align-items:center; gap:.4rem; padding:.25rem .6rem; border-radius:999px; background:#fff; border:1px solid #e5e7eb; font-size:.9rem; }
+      .chip .dot { width:.5rem; height:.5rem; border-radius:50%; }
+      .map-toolbar { display:flex; gap:1rem; align-items:center; margin-bottom:.75rem; }
+      .map-card { height: calc(100vh - 320px); border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+      .help-mini { font-size:.85rem; color:#6b7280; }
+    "))
+  ),
+  tabItems(...)
+)
+```
+
+Beberapa hal yang bisa dimodifikasi dengan cepat saat presentasi:
+- `--brand`, `--brand-2`, `--bg` → warna utama/header/sidebar/latar
+- `.skin-blue .main-header .logo` / `.navbar` → warna header
+- `.chip` → bentuk chip indeks di atas peta
+- `.map-card` → tinggi/rounded/shadow kartu peta
+- `.help-mini` → ukuran/warna teks bantuan
+
+# 4. Server (Logika Aplikasi)
+
+Server dibagi menjadi beberapa blok logika.
+
+## 4.1 Inisialisasi state
+
+Digunakan untuk mengingat layer mana yang aktif & acuan legenda.
+
+```r
+server <- function(input, output, session) {
+  state <- reactiveValues(
+    grup_lama = character(0),
+    legenda   = "NDVI"
+  )
+  ...
+}
+```
+
+## 4.2 Memuat data statistik zonal
+
+```r
+zonal <- read.csv("output/Zonal_Statistics_Madiun.csv", check.names = FALSE)
+colnames(zonal) <- gsub("\\.+", "_", colnames(zonal))
+colnames(zonal) <- gsub("_$", "", colnames(zonal))
+zonal$Kecamatan <- trimws(zonal$Kecamatan)
+```
+
+Kolom seperti `NDVI_Mean`, `NDVI_Maximum`, dst. dinormalisasi namanya agar aman dipanggil.
+
+## 4.3 Render Peta Leaflet
+
+Peta dibuat dengan `renderLeaflet`. Urutannya: buat basemap, tambahkan raster indeks (masing-masing dalam `group = nama_indeks`), tambahkan batas kecamatan, tambahkan layers control.
+
+```r
+output$peta <- renderLeaflet({
+  peta <- leaflet(options = leafletOptions(minZoom = 10, maxZoom = 16)) %>%
+    setView(lng = 111.5230, lat = -7.6333, zoom = 11)
+
+  for (grup_bm in names(carto_style)) {
+    peta <- peta %>% addTiles(urlTemplate = url_carto(carto_style[[grup_bm]]),
+                              group = grup_bm, attribution = atrib_carto,
+                              options = tileOptions(subdomains = "abcd"))
+  }
+  peta <- peta %>% addTiles(group = "OpenStreetMap", attribution = "© OpenStreetMap contributors")
+  peta <- peta %>% addProviderTiles("Esri.WorldImagery", group = "Esri World Imagery", attribution = "Tiles © Esri")
+
+  # Tambah raster tiap indeks (mode kontinu awal)
+  for (nama in names(raster_indeks)) {
+    peta <- peta %>% addRasterImage(x = raster_indeks[[nama]], colors = palet_indeks[[nama]],
+                                   project = FALSE, group = nama, opacity = 0.85,
+                                   layerId = nama, maxBytes = 12*1024^2, method = "bilinear")
+  }
+
+  # Tambah batas kecamatan
+  peta <- peta %>% addPolygons(data = batas, group = "Batas Kecamatan",
+                               color = "#111827", weight = 1.2, fillOpacity = 0,
+                               opacity = 0.9, label = ~Kecamatan,
+                               highlightOptions = highlightOptions(weight = 2.5, color = "#2563eb", bringToFront = TRUE),
+                               popup = popupTable(batas, zcol = c("Kecamatan", "Kab_Kota", "LuasKm2")))
+
+  # Layers control (collapsed = FALSE)
+  peta <- peta %>% addLayersControl(baseGroups = grup_basemap,
+                                   overlayGroups = c(names(raster_indeks), "Batas Kecamatan"),
+                                   options = layersControlOptions(collapsed = FALSE, position = "topright")) %>%
+                   hideGroup(setdiff(names(raster_indeks), "NDVI"))
+
+  peta
+})
+```
+
+Keterangan penting:
+- `overlayGroups` memuat **4 raster indeks + "Batas Kecamatan"**. Pengguna bisa mencentang/mencentang-mati masing-masing.
+- `hideGroup(setdiff(..., "NDVI"))` → saat awal, hanya NDVI yang tampil; lainnya bisa dinyalakan manual.
+- `layersControlOptions(collapsed = FALSE)` → panel layer selalu terlihat (praktis saat presentasi).
+
+## 4.4 Fungsi `gambar_legenda()`
+
+Bergantung pada `input$tampilkan_kelas`:
+- `FALSE` → legenda **kontinu** (`addLegend` dengan `pal`, `values`, `labFormat(digits=2)`)
+- `TRUE`  → legenda **kelas** (`addLegend` dengan `colors`, `labels` sesuai `kelas_indeks[[acuan]]$label`)
+
+```r
+gambar_legenda <- function(acuan) {
+  proxy <- leafletProxy("peta") %>% clearControls()
+  if (is.null(acuan)) return(invisible(NULL))
+  if (isTRUE(input$tampilkan_kelas)) {
+    k <- kelas_indeks[[acuan]]
+    proxy %>% addLegend(position="bottomright", colors=k$warna, labels=k$label, title=meta_indeks[[acuan]]$label, opacity=0.9)
+  } else {
+    proxy %>% addLegend(position="bottomright", pal=palet_indeks[[acuan]], values=rentang_indeks[[acuan]],
+                        title=meta_indeks[[acuan]]$label, labFormat=labelFormat(digits=2), opacity=0.9)
+  }
+  invisible(NULL)
+}
+```
+
+## 4.5 Observer: ganti legenda saat berganti layer
+
+Ketika pengguna mencentang layer raster lain di panel `layersControl`, aplikasi menentukan `acuan` (layer terakhir yang dinyalakan) lalu memanggil `gambar_legenda()`.
+
+```r
+observeEvent(input$peta_groups, {
+  grup <- input$peta_groups
+  if (is.null(grup)) grup <- character(0)
+  raster_aktif <- intersect(names(meta_indeks), grup)
+  grup_baru <- intersect(raster_aktif, setdiff(grup, state$grup_lama))
+  acuan <- if (length(grup_baru)>0) grup_baru[1] else if (state$legenda %in% raster_aktif) state$legenda else if (length(raster_aktif)>0) raster_aktif[1] else NULL
+  state$grup_lama <- grup
+  if (!identical(acuan, state$legenda)) { state$legenda <- acuan; gambar_legenda(acuan) }
+}, ignoreNULL = FALSE)
+```
+
+## 4.6 Observer: toggle mode KELAS
+
+Inilah kunci tampilan "kelas" yang tadi dibuatkan screenshot-nya.
+
+Saat `input$tampilkan_kelas` berubah:
+1. Tentukan `warna_baru` (`palet_kelas` atau `palet_indeks`)
+2. Hapus semua raster (`removeImage`) lalu tambahkan kembali (`addRasterImage`) dengan palette baru
+3. Kembalikan visibilitas (yang dicentang tetap tampil)
+4. Perbarui legenda dengan `gambar_legenda(state$legenda)`
+
+```r
+observeEvent(input$tampilkan_kelas, {
+  kelas_mode <- isTRUE(input$tampilkan_kelas)
+  warna_baru <- if (kelas_mode) palet_kelas else palet_indeks
+  grup <- input$peta_groups; if (is.null(grup)) grup <- character(0)
+  for (nama in names(raster_indeks)) {
+    leafletProxy("peta") %>%
+      removeImage(nama) %>%
+      addRasterImage(x=raster_indeks[[nama]], colors=warna_baru[[nama]], project=FALSE,
+                     group=nama, opacity=0.85, layerId=nama, maxBytes=12*1024^2, method="bilinear")
+  }
+  gambar_legenda(state$legenda)
+})
+```
+
+## 4.7 Sinkronisasi peta–tabel & interaksi
+
+Beberapa observer kecil menghubungkan tab Statistik dengan peta:
+- Klik baris tabel DT → `leafletProxy("peta") %>% setView` + highlight poligon kecamatan terkait
+- Klik batang plotly (`event_data("plotly_click")`) → efek serupa (zoom/sorot)
+- Popup per kecamatan menampilkan nilai ringkas dari `zonal`
+
+Semua ini membuat pengalaman interaktif terasa mulus saat presentasi.
+
+# 5. Langkah-langkah Menjalankan (untuk demo)
+
+1. Buka folder proyek (berisi `app.R`, `tubes.R`, `utils.R`, `Data/`, `output/`)
+2. Pastikan `output/` berisi raster indeks (`NDVI_madiun.tif`, `NDBI_madiun.tif`, `NDWI_madiun.tif`, `NDCI_Cloud_Madiun.tif`) dan `Zonal_Statistics_Madiun.csv`
+3. Jalankan di R/RStudio:
+   ```r
+   shiny::runApp()
+   ```
+4. Di tab **Peta Interaktif**: centang indeks lain, coba **Tampilkan sebagai kelas (klasifikasi)** untuk melihat tampilan berkelas (mirip screenshot `09–12_peta_*_kelas.png`)
+5. Di tab **Statistik Zonal**: pilih indeks, geser slider rentang, klik baris tabel/diagram untuk melihat sinkronisasi ke peta
+
+# 6. Tips Modifikasi Tampilan (cepat)
+
+Saat presentasi, modifikasi paling aman & terlihat:
+
+- **Ganti warna header/sidebar:** ubah nilai `--brand`/`--brand-2` di blok CSS `:root`
+- **Ubah teks header:** `dashboardHeader(title = "...")`
+- **Ubah label chip:** edit `meta_indeks[[k]]$singkat` (mis. "Vegetasi"→"Tutupan Hijau")
+- **Ubah batas/label kelas:** edit `kelas_indeks` (batas & `label`)
+- **Tambah/mengurangi basemap:** edit `grup_basemap` & blok `addTiles/addProviderTiles`
+- **Atur tinggi peta:** ubah `height` di `leafletOutput` atau `.map-card` (CSS)
+
+# Penutup
+
+Secara garis besar, alur `app.R` sangat sederhana: **UI** mendefinisikan tata letak dashboard; **Server** membaca raster+vektor+statistik, merender Leaflet, mengatur interaksi (layer, kelas, legenda, sinkronisasi), lalu menampilkan tabel/grafik. Yang perlu ditekankan saat presentasi adalah **mode kelas**, **sinkronisasi peta–statistik**, dan **penggunaan CARTO basemap** beserta kemudahan modifikasi warna via **CSS kustom** di `tags$head`.
