@@ -19,12 +19,31 @@ library(dplyr)
 library(DT)
 
 # ====================================
+# PALET WARNA SESUAI app.R (LEAFLET)
+# ====================================
+# Menggunakan generator warna yang sama dengan app.R,
+# bukan grDevices::hcl.colors yang memakai palet berbeda.
+buat_palet_web <- function(nama, n = 100) {
+  fungsi_warna <- leaflet::colorNumeric(
+    palette = nama,
+    domain = c(0, 1),
+    na.color = "#00000000"
+  )
+  fungsi_warna(seq(0, 1, length.out = n))
+}
+
+warna_ndvi <- buat_palet_web("YlGn")
+warna_ndbi <- buat_palet_web("YlOrRd")
+warna_ndwi <- buat_palet_web("Blues")
+
+
+# ====================================
 # 3. MENENTUKAN FOLDER
 # ====================================
 
-setwd("C:/SEMESTER 5/PEMSPA/TUBES ETS")
+setwd("C:/Users/user/Downloads/semester 5/Pemspa/TUBES ETS/TUBES ETS")
 
-folder_citra <- "C:/SEMESTER 5/PEMSPA/TUBES ETS/Data"
+folder_citra <- "C:/Users/user/Downloads/semester 5/Pemspa/TUBES ETS/TUBES ETS/Data"
 
 # ====================================
 # 4. MENCARI FILE CITRA
@@ -77,7 +96,7 @@ crs(B04)
 # ====================================
 
 madiun <- st_read(
-  "C:/SEMESTER 5/PEMSPA/TUBES ETS/Data/batas madiun"
+  "C:/Users/user/Downloads/semester 5/Pemspa/TUBES ETS/TUBES ETS/Data/batas madiun"
 )
 
 # Memilih Kabupaten dan Kota Madiun
@@ -222,7 +241,7 @@ names(NDVI) <- "NDVI"
 # Menampilkan hasil
 plot(
   NDVI,
-  col = hcl.colors(100, "YlGn"),
+  col = warna_ndvi,
   main = "Peta NDVI Kabupaten madiun"
 )
 
@@ -244,7 +263,7 @@ names(NDBI) <- "NDBI"
 
 plot(
   NDBI,
-  col = hcl.colors(100, "YlOrRd"),
+  col = warna_ndbi,
   main = "Peta NDBI Kabupaten madiun"
 )
 
@@ -265,7 +284,7 @@ names(NDWI) <- "NDWI"
 
 plot(
   NDWI,
-  col = hcl.colors(100, "Blues 3"),
+  col = warna_ndwi,
   main = "Peta NDWI Kabupaten madiun"
 )
 
@@ -285,12 +304,11 @@ writeRaster(
 Red <- citra_mask$B04
 NIR <- citra_mask$B08
 
-# Menghitung NDCI (Normalized Difference Cloud Index)
-# Rumus: (Red - NIR) / (Red + NIR)
+# Menghitung indeks ternormalisasi
 NDCI <- terra::ifel(
-  (Red + NIR) == 0,
+  (NIR + Red) == 0,
   NA,
-  (Red - NIR) / (Red + NIR)
+  (Red-NIR) / (Red+NIR)
 )
 
 # Memberikan nama raster
@@ -325,15 +343,15 @@ png(
 par(mfrow = c(2, 2))
 
 plot(NDVI,
-     col = hcl.colors(100, "YlGn"),
+     col = warna_ndvi,
      main = "NDVI - Vegetasi")
 
 plot(NDBI,
-     col = hcl.colors(100, "YlOrRd"),
+     col = warna_ndbi,
      main = "NDBI - Terbangun")
 
 plot(NDWI,
-     col = hcl.colors(100, "Blues 3"),
+     col = warna_ndwi,
      main = "NDWI - Perairan")
 
 plot(
@@ -357,21 +375,21 @@ par(mfrow = c(2, 2))
 # Peta NDVI
 plot(
   NDVI,
-  col = hcl.colors(100, "YlGn"),
+  col = warna_ndvi,
   main = "NDVI - Vegetasi"
 )
 
 # Peta NDBI
 plot(
   NDBI,
-  col = hcl.colors(100, "YlOrRd"),
+  col = warna_ndbi,
   main = "NDBI - Bangunan"
 )
 
 # Peta NDWI
 plot(
   NDWI,
-  col = hcl.colors(100, "Blues 3"),
+  col = warna_ndwi,
   main = "NDWI - Perairan"
 )
 
@@ -392,7 +410,7 @@ par(mfrow = c(1, 1))
 # ====================================
 
 kecamatan <- st_read(
-  "C:/SEMESTER 5/PEMSPA/TUBES ETS/Data/batas madiun"
+  "C:/Users/user/Downloads/semester 5/Pemspa/TUBES ETS/TUBES ETS/Data/batas madiun"
 )
 
 # Memilih Kabupaten dan Kota Madiun

@@ -9,26 +9,28 @@
 # Menjalankan: shiny::runApp(".")  atau  Rscript app.R
 # =============================================================================
 
+Sys.unsetenv("PROJ_LIB")
+Sys.unsetenv("PROJ_DATA")
+Sys.unsetenv("GDAL_DATA")
 
+library(sf)
+library(terra)
+library(raster)
 # =============================================================================
 # 1. MEMANGGIL LIBRARY
 # =============================================================================
 
-library(shiny)           # framework aplikasi web
-library(shinydashboard)  # komponen dashboard (header, sidebar, body)
-library(leaflet)         # peta interaktif
-library(sf)              # data vektor (batas kecamatan)
-library(raster)          # data raster (indeks spektral)
-library(DT)              # tabel data interaktif
-library(ggplot2)         # grafik batang pada tab statistik
-library(plotly)          # versi interaktif grafik pada tab statistik
+# Memanggil library
+library(shiny)
+library(shinydashboard)
+library(leaflet)
+library(sf)
+library(raster)
+library(DT)
+library(ggplot2)
+library(plotly)
 
-# Fungsi bantu murni (cari_file, normalisasi_nama) dipisahkan ke utils.R
-# agar dapat diuji terpisah (lihat tests/).
-source("utils.R")
-
-
-# =============================================================================
+#=============================================================================
 # 2. KONFIGURASI PATH & METADATA INDEKS
 # -----------------------------------------------------------------------------
 # Semua data dimuat SEKALI di level global (di luar server), sehingga tidak
@@ -38,17 +40,30 @@ source("utils.R")
 # (tanpa ekstensi) sehingga dicari otomatis dengan pola nama "batas".
 # =============================================================================
 
-folder_data   <- "Data"
-folder_output <- "output"
+# Menentukan folder utama proyek
+folder_utama <- "C:/Users/user/Downloads/semester 5/Pemspa/TUBES ETS/TUBES ETS"
 
-# cari_file() didefinisikan di utils.R (di-source di atas).
+# Menentukan lokasi data
+folder_data <- file.path(folder_utama, "Data")
+folder_output <- file.path(folder_utama, "output")
+
+# Fungsi bantu: mencari satu file di dalam folder berdasarkan pola nama.
+# ignore.case = TRUE membuat pencarian tidak terpengaruh huruf besar/kecil
+# (misalnya "NDCI_Cloud_Madiun.tif" tetap ketemu walaupun ditulis lain).
+cari_file <- function(folder, pola) {
+  hasil <- list.files(folder, pattern = pola, full.names = TRUE,
+                      ignore.case = TRUE)
+  hasil <- hasil[!dir.exists(hasil)]          # abaikan nama folder
+  if (length(hasil) == 0) return(NA_character_)
+  hasil[1]
+}
 
 # Nama file batas administrasi & tabel statistik zonal
 file_batas <- cari_file(folder_data, "^batas")
 file_zonal <- cari_file(folder_output, "^Zonal_Statistics_Madiun\\.csv$")
 
 # Metadata tiap indeks: nama file, label, palet peta, warna aksen (untuk chip
-# & grafik), sebutan singkat, serta penjelasan bahasa awam pada modal "Tentang".
+# & grafik), sebutan singkat, serta penjelasan bahasa awam di tab Panduan.
 # Untuk menambah indeks lain cukup tambahkan satu baris di sini.
 meta_indeks <- list(
   NDVI = list(file = "NDVI_madiun.tif",
@@ -74,74 +89,21 @@ meta_indeks <- list(
               singkat = "Perairan",
               info = paste0("Menandai keberadaan air. Nilai tinggi menunjukkan badan ",
                             "air seperti sungai, waduk, kolam, maupun sawah tergenang.")),
-  NDCI = list(file = "NDCI_Cloud_Madiun.tif",
-              label = "NDCI - Indeks Awan",
-              palet = "YlGnBu",
-              aksen = "#128ea0",
-              singkat = "Awan",
-              info = paste0("Menandai keberadaan awan pada citra. Nilai tinggi menunjukkan ",
-                            "tutupan awan, sedangkan nilai rendah berarti permukaan daratan ",
-                            "atau perairan yang relatif bebas awan."))
+  NDCI = list(
+    file = "NDCI_Cloud_Madiun.tif",
+    label = "NDCI - Cloud Index",
+    palet = c("steelblue4", "lightblue", "white", "gray70"),
+    aksen = "#128ea0",
+    singkat = "Awan",
+    info = paste0(
+      "Menampilkan variasi nilai spektral berdasarkan perbedaan ",
+      "band merah (B04) dan inframerah dekat (B08) ",
+      "untuk pengamatan awal area yang diduga tertutup awan."
+    )
+  )
 )
-
 # Warna aksen tiap indeks sebagai named vector (dipakai grafik & kartu ringkasan)
 palet_aksen <- vapply(meta_indeks, function(m) m$aksen, character(1))
-
-# =============================================================================
-# BATAS KELAS INDEKS (untuk tampilan klasifikasi)
-# -----------------------------------------------------------------------------
-# Peta bisa dilihat dalam dua mode:
-#   - kontinu : warna mengikuti nilai indeks (default)
-#   - kelas   : nilai dipecah menjadi kategori bertingkat yang lebih mudah
-#               dibaca, misalnya "vegetasi jarang", "vegetasi rapat"
-# Tiap indeks dipecah menjadi 4 kelas dengan batas yang lazim dipakai pada
-# literatur indeks spektral. Batas bersifat (batas[i], batas[i+1]].
-# =============================================================================
-
-kelas_indeks <- list(
-  NDVI = list(
-    batas = c(-1, 0.2, 0.4, 0.6, 1),
-    label = c("Non-vegetasi (< 0,2)",
-              "Vegetasi jarang (0,2 - 0,4)",
-              "Vegetasi sedang (0,4 - 0,6)",
-              "Vegetasi rapat (> 0,6)"),
-    warna = c("#d73027", "#f4a300", "#a6d96a", "#1a9641")),
-  NDBI = list(
-    batas = c(-1, -0.1, 0.1, 0.3, 1),
-    label = c("Vegetasi / perairan (< -0,1)",
-              "Lahan campuran (-0,1 - 0,1)",
-              "Terbangun sedang (0,1 - 0,3)",
-              "Terbangun rapat (> 0,3)"),
-    warna = c("#1a9641", "#a6d96a", "#f4a300", "#d73027")),
-  NDWI = list(
-    batas = c(-1, -0.2, 0.2, 0.5, 1),
-    label = c("Daratan kering (< -0,2)",
-              "Lembap / tergenang (-0,2 - 0,2)",
-              "Air dangkal (0,2 - 0,5)",
-              "Air luas (> 0,5)"),
-    warna = c("#a66a00", "#e8d08a", "#74a9cf", "#08306b")),
-  NDCI = list(
-    batas = c(-1, -0.5, -0.3, -0.1, 1),
-    label = c("Awan sangat rendah (< -0,5)",
-              "Awan rendah (-0,5 - -0,3)",
-              "Awan sedang (-0,3 - -0,1)",
-              "Awan tinggi (> -0,1)"),
-    warna = c("#fff7bc", "#a1dab4", "#41b6c4", "#0c2c84"))
-)
-
-# Objek palet Leaflet (colorBin) untuk mode kelas. Warnanya berupa kategori
-# tegas (bukan gradasi), sehingga peta lebih mudah dibaca per kelas.
-palet_kelas <- Map(
-  f = function(nama) {
-    colorBin(
-      palette  = kelas_indeks[[nama]]$warna,
-      bins     = kelas_indeks[[nama]]$batas,
-      na.color = "#00000000",
-      alpha    = TRUE
-    )
-  },
-  nama = names(kelas_indeks)
-)
 
 # Lengkapkan path raster (nama file di-escape agar titik .tif tidak dianggap
 # sebagai wildcard pada pola pencarian)
@@ -163,7 +125,6 @@ if (any(is.na(file_wajib)) || any(!file.exists(file_wajib))) {
 #   2 -> resolusi tampilan 40 m (4 raster dikirim +/- 8 MB per sesi)
 #   3 -> resolusi tampilan 60 m (lebih ringan lagi, +/- 4 MB per sesi)
 faktor_agregasi <- 2
-
 
 # =============================================================================
 # 2b. KONFIGURASI BASEMAP CARTO
@@ -228,10 +189,10 @@ grup_basemap <- c(names(carto_style), "OpenStreetMap", "Esri World Imagery")
 # =============================================================================
 
 baca_dan_praproses <- function(path, faktor = faktor_agregasi) {
-
+  
   # Membaca metadata (nilai piksel baru dibaca saat di-resample)
   r <- raster(path)
-
+  
   # Buat grid tujuan: proyeksi ke EPSG:3857 lalu diperkecil faktor agregasi
   grid_web <- projectExtent(r, crs = "EPSG:3857")
   grid_web <- raster(
@@ -241,7 +202,7 @@ baca_dan_praproses <- function(path, faktor = faktor_agregasi) {
     ymn = ymin(grid_web), ymx = ymax(grid_web),
     crs = "EPSG:3857"
   )
-
+  
   # Resampling bilinear (cocok untuk nilai indeks yang kontinu)
   projectRaster(r, to = grid_web, method = "bilinear")
 }
@@ -253,6 +214,8 @@ raster_indeks <- lapply(file_indeks, baca_dan_praproses)
 rentang_indeks <- lapply(raster_indeks, function(r) {
   range(values(r), na.rm = TRUE)
 })
+
+rentang_indeks$NDCI <- c(-0.7, 0.25)
 
 # Objek palet Leaflet (colorNumeric). Palet dibuat sebagai FUNGSI agar
 # addRasterImage memakai domain ini, bukan domain otomatis dari data.
@@ -269,7 +232,6 @@ palet_indeks <- Map(
   nama    = names(raster_indeks),
   rentang = rentang_indeks
 )
-
 
 # =============================================================================
 # 4. MEMUAT BATAS ADMINISTRASI (vektor)
@@ -305,7 +267,8 @@ if ("label" %in% names(batas_kec)) {
 } else {
   batas_kec$label_peta <- as.character(seq_len(nrow(batas_kec)))
 }
-
+batas_kec <- batas_kec %>%
+  filter(as.character(kode_kk) %in% c("35.19", "35.77"))
 
 # =============================================================================
 # 5. MEMUAT TABEL STATISTIK ZONAL
@@ -323,7 +286,7 @@ zonal_stats <- read.csv(file_zonal, stringsAsFactors = FALSE)
 # nilai statistiknya NA dan ditampilkan sebagai "n.a.".
 # =============================================================================
 
-# normalisasi_nama() didefinisikan di utils.R (di-source di atas).
+normalisasi_nama <- function(x) tolower(trimws(x))
 
 kolom_stat <- c("NDVI_Mean", "NDVI_Minimum", "NDVI_Maximum", "NDVI_Median",
                 "NDBI_Mean", "NDBI_Minimum", "NDBI_Maximum", "NDBI_Median",
@@ -375,17 +338,8 @@ kab_label <- ifelse(
   paste0("Kabupaten ", batas_kec$kab_kota)
 )
 
-# Luas wilayah tiap kecamatan (hektar), dihitung pada proyeksi UTM 49S
-# (crs_planar) agar hasil luas akurat dan tidak bergantung pada satuan derajat.
-batas_kec$luas_ha <- as.numeric(
-  st_area(st_transform(batas_kec, crs_planar))
-) / 10000
-
 # Format angka 3 desimal; "n.a." bila data tidak ada
 fmt3 <- function(x) ifelse(is.na(x), "n.a.", sprintf("%.3f", x))
-
-# Format angka 1 desimal; "n.a." bila data tidak ada
-fmt1 <- function(x) ifelse(is.na(x), "n.a.", sprintf("%.1f", x))
 
 # Baris teks ringkas satu indeks untuk tooltip (nilai mean saja)
 baris_tooltip <- function(pr) {
@@ -411,7 +365,6 @@ prs_aktif <- intersect(c("NDVI", "NDBI", "NDWI", "NDCI"), names(meta_indeks))
 label_pendek <- batas_kec$kecamatan
 tooltip_kec   <- paste0("<b>", label_pendek, "</b><br>", kab_label)
 popup_kec     <- paste0("<b>", label_pendek, "</b><br>", kab_label,
-                        "<br>Luas wilayah: ", fmt1(batas_kec$luas_ha), " ha",
                         "<hr style='margin:5px 0'>")
 for (pr in prs_aktif) {
   tooltip_kec <- paste0(tooltip_kec, "<br>", baris_tooltip(pr))
@@ -442,9 +395,6 @@ titik_label <- st_sf(
 # Peta nama kecamatan -> wilayah (kabupaten/kota), dari poligon yang valid
 peta_wilayah <- setNames(kab_label, normalisasi_nama(batas_kec$kecamatan))
 
-# Peta nama kecamatan -> luas (ha), dari poligon yang valid
-peta_luas <- setNames(batas_kec$luas_ha, normalisasi_nama(batas_kec$kecamatan))
-
 # Kolom statistik lengkap (termasuk simpangan baku) diambil dari CSV zonal
 kolom_ringkas <- unlist(lapply(prs_aktif, function(p)
   paste0(p, "_", c("Mean", "Minimum", "Maximum", "Median", "SD"))))
@@ -452,32 +402,25 @@ kolom_ringkas <- unlist(lapply(prs_aktif, function(p)
 zonal_rapi <- data.frame(
   Kecamatan = zonal_stats$Kecamatan,
   Wilayah   = unname(peta_wilayah[normalisasi_nama(zonal_stats$Kecamatan)]),
-  Luas_ha   = unname(peta_luas[normalisasi_nama(zonal_stats$Kecamatan)]),
   stringsAsFactors = FALSE
 )
 for (kol in kolom_ringkas) zonal_rapi[[kol]] <- zonal_stats[[kol]]
-
 
 # =============================================================================
 # 6. UI (shinydashboard)
 # =============================================================================
 
 ui <- dashboardPage(
-
+  
   # --- 6.1 Header dashboard ---
   dashboardHeader(
     title = tags$span(
       class = "brand",
       "WebGIS Indeks Spektral Kota Madiun dan Kab. Madiun"
     ),
-    titleWidth = 470,
-    tags$li(
-      class = "dropdown",
-      actionLink("btn_tentang", "Tentang",
-                 class = "btn-tentang", title = "Tentang aplikasi")
-    )
+    titleWidth = 470
   ),
-
+  
   # --- 6.2 Sidebar berisi menu navigasi ---
   dashboardSidebar(
     width = 250,
@@ -502,10 +445,10 @@ ui <- dashboardPage(
       )
     )
   ),
-
+  
   # --- 6.3 Body dashboard ---
   dashboardBody(
-
+    
     tags$head(
       # Jenis huruf modern (bila tidak ada koneksi, otomatis pakai huruf sistem)
       tags$link(rel = "stylesheet",
@@ -539,8 +482,12 @@ ui <- dashboardPage(
         .brand { display:flex; align-items:center; gap:9px; font-weight:700; letter-spacing:.2px; font-size:13px; white-space:nowrap; }
         .brand-mark { display:inline-flex; width:26px; height:26px; border-radius:8px;
           background:rgba(255,255,255,.16); align-items:center; justify-content:center; font-size:13px; }
+        .wrapper { position:relative; min-height:100vh; }
+        /* Sidebar: memanjang setinggi HALAMAN (bukan cuma setinggi layar),
+           supaya tetap penuh sampai bawah saat di-screenshot full-page. */
         .main-sidebar { background:#152340 !important;
-          position:fixed !important; top:0; bottom:0; overflow-y:auto; z-index:1020; }
+          position:absolute !important; top:0; bottom:0; min-height:100vh;
+          overflow-y:auto; z-index:1020; }
         .sidebar-menu > li > a { font-weight:500; font-size:14px; }
         .sidebar-menu > li > a:hover { background:#1e2f52 !important; }
         .sidebar-menu > li.active > a { background:#27406f !important; border-left:3px solid #4fc3f7 !important; }
@@ -627,50 +574,9 @@ ui <- dashboardPage(
           font-weight:700; color:var(--ink); margin-bottom:6px; }
         .card p { color:var(--muted); font-size:13px; line-height:1.6; margin:0; }
         .step-list { color:#33405a; font-size:13.5px; line-height:1.95; margin:0; padding-left:18px; }
-
-        /* ---- Tombol Tentang pada header ---- */
-        .main-header .dropdown { height:50px; display:flex; align-items:center; }
-        .main-header .dropdown .action-button { display:flex; align-items:center; height:50px;
-          padding:0 18px; color:#fff !important; font-size:13.5px; font-weight:600;
-          border-left:1px solid rgba(255,255,255,.14); border-radius:0 !important; }
-        .main-header .dropdown .action-button .action-label { margin-left:6px; }
-        .main-header .dropdown .action-button:hover { background:rgba(255,255,255,.16); text-decoration:none; }
-
-        /* ---- Selubung pemuatan (spinner) sampai peta siap ---- */
-        #splash { position:fixed; top:50px; left:0; right:0; bottom:0; z-index:3000;
-          background:#eef1f8; display:flex; align-items:center; justify-content:center;
-          transition:opacity .45s ease; opacity:1; }
-        #splash.sudah { opacity:0; pointer-events:none; }
-        .splash-box { text-align:center; }
-        .splash-teks { margin-top:14px; color:var(--muted); font-size:13.5px; }
-        .spinner { width:44px; height:44px; margin:0 auto; border-radius:50%;
-          border:4px solid #d7e0f0; border-top-color:#2f6fd0;
-          animation:putar .9s linear infinite; }
-        @keyframes putar { to { transform:rotate(360deg); } }
-
-        /* ---- Tampilan pada layar kecil (ponsel & tablet) ---- */
-        @media (max-width: 767px) {
-          .main-header .logo { padding-left:46px; }
-          .main-header .brand { font-size:11.5px; letter-spacing:0; }
-          .main-header .dropdown .action-button { padding:0 13px; font-size:12.5px; }
-          .content { padding:12px 8px; }
-          .page-head h2 { font-size:18px; }
-          .page-head p { font-size:12.5px; }
-          .map-card { height:calc(100vh - 240px); min-height:320px; }
-          .box { border-radius:12px !important; }
-          .small-box h3 { font-size:25px; }
-          .small-box p { font-size:11.5px; }
-          table.dataTable { font-size:12px; }
-          .leaflet-control-layers { max-width:175px; font-size:11.5px !important; }
-          .leaflet-control.legend { font-size:11.5px; }
-        }
-        @media (min-width: 768px) and (max-width: 991px) {
-          .main-header .brand { font-size:12px; }
-          .map-card { height:calc(100vh - 195px); }
-        }
       "))
     ),
-
+    
     # Indeks spektral (NDVI/NDBI/NDWI/NDCI) hanya boleh menyala SATU per satu.
     # Listener ini bekerja pada kontrol layer Leaflet: setiap kali kotak indeks
     # dicentang, kotak indeks lain otomatis di-uncheck (lewat .click() agar
@@ -692,34 +598,9 @@ ui <- dashboardPage(
        });",
       paste(sprintf("'%s'", names(meta_indeks)), collapse = ", ")
     ))),
-
-    # ---- Selubung pemuatan (spinner) sampai peta siap ditampilkan ----
-    tags$div(
-      id = "splash",
-      tags$div(class = "splash-box",
-               tags$div(class = "spinner"),
-               tags$div(class = "splash-teks", "Menyiapkan peta indeks spektral…"))
-    ),
-    tags$script(HTML("
-      (function(){
-        var sp = document.getElementById('splash');
-        if(!sp) return;
-        var t = null;
-        var selesai = function(){
-          if(sp.classList.contains('sudah')) return;
-          sp.classList.add('sudah');
-          if(t) clearInterval(t);
-          setTimeout(function(){ sp.style.display='none'; }, 450);
-        };
-        var siap = function(){ return !!document.querySelector('.leaflet-container .leaflet-pane'); };
-        if (siap()) { selesai(); return; }
-        t = setInterval(function(){ if (siap()) selesai(); }, 120);
-        setTimeout(selesai, 12000);   // jangan biarkan pengguna menunggu terlalu lama
-      })();
-    ")),
-
+    
     tabItems(
-
+      
       # ---------- TAB 1: PETA INTERAKTIF ----------
       tabItem(
         tabName = "peta",
@@ -740,21 +621,11 @@ ui <- dashboardPage(
           )
         ),
         tags$div(
-          class = "map-toolbar",
-          checkboxInput(
-            "tampilkan_kelas", "Tampilkan sebagai kelas (klasifikasi)",
-            value = FALSE
-          ),
-          tags$span(class = "help-mini",
-                    "Nilai indeks dipecah menjadi kategori berwarna bertingkat; ",
-                    "legenda menyesuaikan otomatis.")
-        ),
-        tags$div(
           class = "map-card",
           leafletOutput("peta", height = "100%")
         )
       ),
-
+      
       # ---------- TAB 2: STATISTIK ZONAL ----------
       tabItem(
         tabName = "statistik",
@@ -765,7 +636,7 @@ ui <- dashboardPage(
             tags$p("Pilih indeks, lihat peringkatnya, lalu telusuri angka rincinya.")
           )
         ),
-
+        
         # Kartu ringkasan besar (KPI) yang berubah mengikuti pilihan
         fluidRow(
           valueBoxOutput("kpi_rata",   width = 3),
@@ -773,7 +644,7 @@ ui <- dashboardPage(
           valueBoxOutput("kpi_rendah", width = 3),
           valueBoxOutput("kpi_jumlah", width = 3)
         ),
-
+        
         fluidRow(
           box(
             title = "Pilihan tampilan", width = 3, solidHeader = FALSE,
@@ -803,7 +674,7 @@ ui <- dashboardPage(
             plotlyOutput("grafik_zonal", height = "380px")
           )
         ),
-
+        
         fluidRow(
           box(
             title = "Tabel rinci", width = 12,
@@ -812,7 +683,7 @@ ui <- dashboardPage(
         )
       )
     ),
-
+    
     tags$footer(
       class = "app-footer",
       tags$span("Dibuat oleh: "),
@@ -821,30 +692,28 @@ ui <- dashboardPage(
       tags$b("Sabrina Sandra RA (NRP: 5016241061)")
     )
   ),
-
+  
   title = "WebGIS Indeks Spektral Kota Madiun dan Kab. Madiun",
   skin  = "blue"
 )
-
 
 # =============================================================================
 # 7. SERVER
 # =============================================================================
 
 server <- function(input, output, session) {
-
   # -------------------------------------------------------------------------
   # 7.1 Peta dasar (renderLeaflet) - dieksekusi SEKALI per sesi
   # -------------------------------------------------------------------------
   output$peta <- renderLeaflet({
-
+    
     # Bangun peta dasar
     peta <- leaflet(options = leafletOptions(
       minZoom = 8,
       maxZoom = 18,
       zoomControl = TRUE
     ))
-
+    
     # --- 7.1.0 Basemap ---
     # a) Basemap CARTO (perlu API key, lihat bagian 2b)
     for (grup_bm in names(carto_style)) {
@@ -860,7 +729,7 @@ server <- function(input, output, session) {
           )
         )
     }
-
+    
     # b) Basemap tambahan yang tidak memerlukan API key
     peta <- peta %>%
       addTiles(
@@ -868,7 +737,7 @@ server <- function(input, output, session) {
         attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
       ) %>%
       addProviderTiles(providers$Esri.WorldImagery, group = "Esri World Imagery")
-
+    
     # --- 7.1.1 Overlay raster indeks spektral ---
     # Ditambahkan lewat perulangan agar jumlah layer mengikuti meta_indeks.
     # project = FALSE karena raster sudah diproyeksikan ke EPSG:3857 saat
@@ -886,10 +755,10 @@ server <- function(input, output, session) {
           method   = "bilinear"    # interpolasi halus -> pola kotak berkurang
         )
     }
-
+    
     # --- 7.1.2 Batas kecamatan, layer control, legenda, dan fokus wilayah ---
     peta <- peta %>%
-
+      
       # Batas kecamatan: hanya garis tepi (tanpa isi).
       # label   = tooltip sebelum diklik (nama + statistik rata-rata)
       # popup   = info lengkap saat diklik
@@ -909,7 +778,7 @@ server <- function(input, output, session) {
           bringToFront = TRUE
         )
       ) %>%
-
+      
       # Label nama kecamatan yang SELALU tampil, tanpa perlu klik/hover.
       # Titik penempel = st_point_on_surface (pusat poligon).
       addLabelOnlyMarkers(
@@ -924,17 +793,17 @@ server <- function(input, output, session) {
         ),
         group = "Nama Kecamatan"
       ) %>%
-
+      
       # Tampilkan NDVI saja di awal, indeks lain disembunyikan
       hideGroup(setdiff(names(meta_indeks), "NDVI")) %>%
-
+      
       # Pengontrol basemap + toggle overlay
       addLayersControl(
         baseGroups = grup_basemap,
         overlayGroups = c("Nama Kecamatan", names(meta_indeks), "Batas Kecamatan"),
         options = layersControlOptions(collapsed = FALSE, position = "topright")
       ) %>%
-
+      
       # Legenda awal (akan diganti otomatis saat layer berganti)
       addLegend(
         position  = "bottomright",
@@ -944,20 +813,20 @@ server <- function(input, output, session) {
         labFormat = labelFormat(digits = 2),
         opacity   = 0.9
       ) %>%
-
+      
       # Skala jarak di pojok kiri bawah (informasi ukuran/luas wilayah)
       addScaleBar(position = "bottomleft") %>%
-
+      
       # Pusatkan dan zoom otomatis ke wilayah Kabupaten & Kota Madiun
       fitBounds(lng1 = st_bbox(batas_kec)[["xmin"]],
                 lat1 = st_bbox(batas_kec)[["ymin"]],
                 lng2 = st_bbox(batas_kec)[["xmax"]],
                 lat2 = st_bbox(batas_kec)[["ymax"]])
-
+    
     peta
   })
-
-
+  
+  
   # -------------------------------------------------------------------------
   # 7.2 Legenda dinamis - menyesuaikan layer raster yang sedang aktif
   # -------------------------------------------------------------------------
@@ -970,55 +839,22 @@ server <- function(input, output, session) {
   #   2. bila layer legenda dimatikan  -> jatuh ke layer raster berikutnya
   #   3. bila tidak ada raster aktif   -> legenda disembunyikan
   # -------------------------------------------------------------------------
-
+  
   state <- reactiveValues(
     grup_lama = character(0),   # daftar group pada pemberitahuan sebelumnya
     legenda   = "NDVI"          # layer yang sedang menjadi acuan legenda
   )
-
-  # Gambar ulang legenda sesuai mode tampilan (kontinu / kelas) dan indeks.
-  # Dipakai oleh pengamat pergantian layer (7.2) maupun sakelar klasifikasi.
-  gambar_legenda <- function(acuan) {
-
-    proxy <- leafletProxy("peta") %>% clearControls()   # hapus legenda lama
-    if (is.null(acuan)) return(invisible(NULL))
-
-    if (isTRUE(input$tampilkan_kelas)) {
-      # Mode kelas: legenda berupa kategori tegas dengan nama kelasnya
-      k <- kelas_indeks[[acuan]]
-      proxy %>% addLegend(
-        position = "bottomright",
-        colors   = k$warna,
-        labels   = k$label,
-        title    = meta_indeks[[acuan]]$label,
-        opacity  = 0.9
-      )
-    } else {
-      # Mode kontinu: gradasi warna seperti semula
-      proxy %>% addLegend(
-        position  = "bottomright",
-        pal       = palet_indeks[[acuan]],
-        values    = rev(rentang_indeks[[acuan]]),
-        title     = meta_indeks[[acuan]]$label,
-        labFormat = labelFormat(digits = 2),
-        opacity   = 0.9,
-        decreasing = TRUE
-      )
-    }
-
-    invisible(NULL)
-  }
-
+  
   observeEvent(input$peta_groups, {
-
+    
     grup <- input$peta_groups
     if (is.null(grup)) grup <- character(0)
-
+    
     raster_aktif <- intersect(names(meta_indeks), grup)
-
+    
     # Layer raster yang baru saja dinyalakan pengguna
     grup_baru <- intersect(raster_aktif, setdiff(grup, state$grup_lama))
-
+    
     acuan <- if (length(grup_baru) > 0) {
       grup_baru[1]                                  # ikuti layer terakhir aktif
     } else if (state$legenda %in% raster_aktif) {
@@ -1028,65 +864,38 @@ server <- function(input, output, session) {
     } else {
       NULL                                          # tidak ada raster aktif
     }
-
+    
     state$grup_lama <- grup
-
+    
     # Hanya gambar ulang bila acuan legenda benar-benar berubah
     if (identical(acuan, state$legenda)) return()
     state$legenda <- acuan
-
-    gambar_legenda(acuan)
-
+    
+    proxy <- leafletProxy("peta") %>% clearControls()   # hapus legenda lama
+    
+    if (!is.null(acuan)) {
+      proxy %>%
+        addLegend(
+          position  = "bottomright",
+          pal       = palet_indeks[[acuan]],
+          values    = rentang_indeks[[acuan]],
+          title     = meta_indeks[[acuan]]$label,
+          labFormat = labelFormat(digits = 2),
+          opacity   = 0.9
+        )
+    }
+    
     # Catatan: clearControls() hanya menghapus legenda, sedangkan
     # layers control (basemap/overlay) TIDAK ikut terhapus, jadi
     # pengguna tetap bisa mencentang layer seperti biasa.
-
+    
   }, ignoreNULL = FALSE)
-
-
-  # -------------------------------------------------------------------------
-  # 7.2b Mode klasifikasi - ganti warna raster & legenda menjadi kategori
-  # -------------------------------------------------------------------------
-  # Raster ditambah ulang lewat proxy memakai palet sesuai mode, lalu
-  # visibilitas layer dikembalikan seperti semula (yang dicentang tetap tampil).
-  observeEvent(input$tampilkan_kelas, {
-
-    kelas_mode <- isTRUE(input$tampilkan_kelas)
-    warna_baru <- if (kelas_mode) palet_kelas else palet_indeks
-
-    grup <- input$peta_groups
-    if (is.null(grup)) grup <- character(0)
-    raster_aktif <- intersect(names(meta_indeks), grup)
-
-    for (nama in names(raster_indeks)) {
-      leafletProxy("peta") %>%
-        removeImage(nama) %>%
-        addRasterImage(
-          x        = raster_indeks[[nama]],
-          colors   = warna_baru[[nama]],
-          project  = FALSE,
-          group    = nama,
-          opacity  = 0.85,
-          layerId  = nama,
-          maxBytes = 12 * 1024^2,
-          method   = "bilinear"
-        )
-    }
-
-    # Pulihkan visibilitas layer seperti sebelum diganti
-    proxy <- leafletProxy("peta")
-    proxy %>% hideGroup(setdiff(names(meta_indeks), raster_aktif))
-    if (length(raster_aktif) > 0) proxy %>% showGroup(raster_aktif)
-
-    # Legenda harus selalu mengikuti mode terbaru
-    gambar_legenda(state$legenda)
-
-  }, ignoreInit = TRUE)
-
+  
+  
   # -------------------------------------------------------------------------
   # 7.3 Statistik zonal - kartu ringkasan, grafik peringkat, dan tabel rinci
   # -------------------------------------------------------------------------
-
+  
   # Data terfilter menurut pilihan wilayah (reaktif)
   data_wilayah <- reactive({
     d <- zonal_rapi
@@ -1095,7 +904,7 @@ server <- function(input, output, session) {
     }
     d
   })
-
+  
   # Data terfilter wilayah + rentang nilai pada slider (reaktif)
   data_zonal <- reactive({
     d  <- data_wilayah()
@@ -1108,7 +917,7 @@ server <- function(input, output, session) {
     }
     d
   })
-
+  
   # Rentang slider otomatis menyesuaikan indeks & wilayah yang dipilih
   observe({
     req(input$pilih_indeks, input$pilih_wilayah)
@@ -1120,7 +929,7 @@ server <- function(input, output, session) {
     updateSliderInput(session, "rentang_nilai", min = lo, max = hi,
                       value = c(lo, hi), step = 0.01)
   })
-
+  
   # Sorot satu kecamatan di peta (dipakai oleh klik grafik & baris tabel)
   sorot_kecamatan <- function(kec) {
     if (is.null(kec) || length(kec) == 0 || !nzchar(kec)) return()
@@ -1141,15 +950,8 @@ server <- function(input, output, session) {
       fillColor   = "#ffb703",
       fillOpacity = 0.18
     )
-
-    # Perbesar tampilan peta ke kecamatan terpilih agar sorotan langsung jelas.
-    bb <- st_bbox(sel)
-    proxy %>% flyToBounds(
-      lng1 = bb[["xmin"]], lat1 = bb[["ymin"]],
-      lng2 = bb[["xmax"]], lat2 = bb[["ymax"]]
-    )
   }
-
+  
   # Empat kartu ringkasan (KPI) mengikuti indeks, wilayah, & rentang terpilih
   output$kpi_rata <- renderValueBox({
     d  <- data_zonal(); pr <- input$pilih_indeks
@@ -1161,7 +963,7 @@ server <- function(input, output, session) {
              paste("Rata-rata", meta_indeks[[pr]]$singkat),
              icon = icon("chart-line"), color = "blue")
   })
-
+  
   output$kpi_tinggi <- renderValueBox({
     d  <- data_zonal(); pr <- input$pilih_indeks
     d  <- d[is.finite(d[[paste0(pr, "_Mean")]]), , drop = FALSE]
@@ -1173,7 +975,7 @@ server <- function(input, output, session) {
              paste("Tertinggi -", d$Kecamatan[i]),
              icon = icon("arrow-up"), color = "green")
   })
-
+  
   output$kpi_rendah <- renderValueBox({
     d  <- data_zonal(); pr <- input$pilih_indeks
     d  <- d[is.finite(d[[paste0(pr, "_Mean")]]), , drop = FALSE]
@@ -1185,7 +987,7 @@ server <- function(input, output, session) {
              paste("Terendah -", d$Kecamatan[i]),
              icon = icon("arrow-down"), color = "orange")
   })
-
+  
   output$kpi_jumlah <- renderValueBox({
     d <- data_zonal()
     valueBox(nrow(d),
@@ -1193,7 +995,7 @@ server <- function(input, output, session) {
                    if (nrow(d) == nrow(zonal_rapi)) "dianalisis" else "terpilih"),
              icon = icon("map"), color = "purple")
   })
-
+  
   # Grafik batang interaktif (plotly): urut dari nilai terendah ke tertinggi.
   # Hover menampilkan nilai; klik batang -> kecamatan disorot di peta &
   # baris tabelnya otomatis terpilih.
@@ -1203,14 +1005,14 @@ server <- function(input, output, session) {
     e  <- d[order(d[[paste0(pr, "_Mean")]]), , drop = FALSE]
     e$nilai     <- e[[paste0(pr, "_Mean")]]
     e$Kecamatan <- factor(e$Kecamatan, levels = e$Kecamatan)
-
+    
     if (nrow(e) == 0) {
       return(plotly_empty(type = "bar") %>%
                layout(title = list(
                  text = "Tidak ada kecamatan pada rentang nilai ini",
                  font = list(size = 14, color = "#6b7686"))))
     }
-
+    
     plot_ly(
       e,
       x = ~nilai, y = ~Kecamatan,
@@ -1237,7 +1039,7 @@ server <- function(input, output, session) {
       config(displayModeBar = FALSE) %>%
       event_register("plotly_click")
   })
-
+  
   # Klik grafik -> sorot kecamatan di peta + pilih baris tabelnya
   # (baca input langsung agar tidak bergantung pada registrasi event_data)
   observeEvent(input[["plotly_click-zonal"]], {
@@ -1266,7 +1068,7 @@ server <- function(input, output, session) {
     i  <- match(kec, ti$Kecamatan)
     if (!is.na(i)) dataTableProxy("tabel_zonal") %>% selectRows(i)
   })
-
+  
   # Klik baris tabel -> sorot kecamatan di peta
   observeEvent(input$tabel_zonal_rows_selected, {
     i <- input$tabel_zonal_rows_selected
@@ -1274,7 +1076,7 @@ server <- function(input, output, session) {
     ti <- tabel_isi()
     if (i[1] <= nrow(ti)) sorot_kecamatan(ti$Kecamatan[i[1]])
   })
-
+  
   # Data tabel rinci (lima kolom statistik untuk indeks yang dipilih)
   tabel_isi <- reactive({
     d  <- data_zonal(); pr <- input$pilih_indeks
@@ -1287,12 +1089,11 @@ server <- function(input, output, session) {
       Maksimum         = d[[kol[3]]],
       Median           = d[[kol[4]]],
       `Simpangan Baku` = d[[kol[5]]],
-      `Luas (ha)`      = round(d$Luas_ha, 1),
       check.names = FALSE,
       stringsAsFactors = FALSE
     )
   })
-
+  
   # Tabel rinci: hanya lima kolom statistik untuk indeks yang dipilih
   output$tabel_zonal <- renderDT({
     tampil <- tabel_isi(); pr <- input$pilih_indeks
@@ -1309,7 +1110,7 @@ server <- function(input, output, session) {
         lengthMenu = c(10, 25, 50),
         dom        = "lBfrtip",
         order      = list(list(2, "desc")),
-        columnDefs = list(list(className = "dt-center", targets = 1:7)),
+        columnDefs = list(list(className = "dt-center", targets = 1:6)),
         buttons    = list(
           list(extend = "csv",   text = "Unduh CSV"),
           list(extend = "excel", text = "Unduh Excel")
@@ -1318,7 +1119,7 @@ server <- function(input, output, session) {
     ) %>%
       formatRound(columns = c("Rata-rata", "Minimum", "Maksimum", "Median",
                               "Simpangan Baku"), digits = 3)
-
+    
     nilai    <- tampil$`Rata-rata`
     nilai_ok <- length(nilai) > 0 && any(is.finite(nilai))
     if (nilai_ok) {
@@ -1333,81 +1134,7 @@ server <- function(input, output, session) {
     }
     hasil
   })
-
-
-  # -------------------------------------------------------------------------
-  # 7.4 Modal "Tentang" - ringkasan proyek, sumber data, rumus, dan penulis
-  # -------------------------------------------------------------------------
-  observeEvent(input$btn_tentang, {
-
-    rumus_indeks <- c(
-      NDVI = "(B08 \u2212 B04) / (B08 + B04)",
-      NDBI = "(B11 \u2212 B08) / (B11 + B08)",
-      NDWI = "(B03 \u2212 B08) / (B03 + B08)",
-      NDCI = "(B04 \u2212 B08) / (B04 + B08)"
-    )
-
-    showModal(modalDialog(
-      title = tags$span("Tentang Aplikasi WebGIS Indeks Spektral"),
-      easyClose = TRUE,
-      footer     = modalButton("Tutup"),
-      size       = "l",
-      tags$div(
-        style = "font-size:13.5px; line-height:1.65; color:#33405a;",
-
-        tags$p(style = "margin-top:0;",
-          "Dashboard WebGIS yang memvisualisasikan empat indeks spektral hasil ",
-          "pemrosesan citra Sentinel-2 dan statistik zonal per kecamatan di ",
-          "Kabupaten & Kota Madiun, sehingga karakteristik tutupan lahan tiap ",
-          "wilayah bisa dibandingkan secara objektif."),
-
-        tags$h4(style = "margin:16px 0 6px; color:#152340;", "Sumber data"),
-        tags$ul(style = "margin:0; padding-left:19px;",
-          tags$li("Citra ", tags$b("Sentinel-2 Level-2A"), " \u00b7 resolusi 10 m \u00b7 ",
-                  "tanggal akuisisi 13 Juli 2026 \u00b7 tile T49MEM."),
-          tags$li("Batas administrasi ", tags$b("18 kecamatan"),
-                  " (15 Kabupaten Madiun dan 3 Kota Madiun).")
-        ),
-
-        tags$h4(style = "margin:14px 0 6px; color:#152340;", "Proses pengolahan"),
-        tags$ul(style = "margin:0; padding-left:19px;",
-          tags$li("Crop & mask citra mengikuti batas administrasi."),
-          tags$li("Perhitungan empat indeks spektral dari band terkait."),
-          tags$li("Reproject ke Web Mercator + agregasi agar ringan untuk web."),
-          tags$li("Statistik zonal per kecamatan: mean, min, maks, median, dan simpangan baku.")
-        ),
-
-        tags$h4(style = "margin:14px 0 6px; color:#152340;", "Rumus indeks"),
-        tags$table(
-          style = "width:100%; border-collapse:collapse; font-size:13px;",
-          tags$thead(tags$tr(
-            lapply(c("Indeks", "Rumus", "Membaca"),
-                   function(t) tags$th(t, style = paste("text-align:left; padding:6px 8px;",
-                                                        "border-bottom:2px solid #dde5f3;",
-                                                        "color:#33405a;")))
-          )),
-          tags$tbody(lapply(names(rumus_indeks), function(p) tags$tr(
-            tags$td(tags$b(p), style = "padding:6px 8px; border-bottom:1px solid #eef1f8;"),
-            tags$td(tags$code(rumus_indeks[[p]]),
-                    style = "padding:6px 8px; border-bottom:1px solid #eef1f8; font-size:12.5px;"),
-            tags$td(meta_indeks[[p]]$singkat,
-                    style = "padding:6px 8px; border-bottom:1px solid #eef1f8;")
-          )))
-        ),
-        tags$p(style = "color:#6b7686; font-size:12.5px; margin-top:8px;",
-          "B03 = Green \u00b7 B04 = Red \u00b7 B08 = NIR \u00b7 B11 = SWIR (Sentinel-2)."),
-
-        tags$h4(style = "margin:14px 0 6px; color:#152340;", "Pembuat & lisensi"),
-        tags$p(style = "margin:0;",
-          tags$b("Abul Fahmi Attaftazani"), " (NRP 5016241048) \u00b7 ",
-          tags$b("Sabrina Sandra RA"), " (NRP 5016241061)"),
-        tags$p(style = "margin:4px 0 0; color:#6b7686; font-size:12.5px;",
-          "Dilisensikan di bawah MIT.")
-      )
-    ))
-  })
 }
-
 
 # =============================================================================
 # 8. JALANKAN APLIKASI
