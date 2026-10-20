@@ -11,6 +11,9 @@ output/*
 .Rproj.user/
 .Rproj
 
+# Hasil knit R Markdown (cukup sumber .Rmd yang disimpan)
+Presentasi_app.html
+
 # Dokumen laporan (di luar cakupan repositori proyek ini)
 Bab3_Metodologi_WebGIS.Rmd
 Bab3_Metodologi_WebGIS.docx
