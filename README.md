@@ -14,6 +14,7 @@ statistik zonal per kecamatan di Kabupaten & Kota Madiun.**
 <br>
 
 <a href="docs/01_peta_ndvi.png">Peta</a> ·
+<a href="docs/09_peta_ndvi_kelas.png">Peta Kelas</a> ·
 <a href="docs/05_popup_kecamatan.png">Popup</a> ·
 <a href="docs/06_tab_statistik.png">Statistik Zonal</a> ·
 <a href="docs/08_tampilan_ponsel.png">Ponsel</a> ·
@@ -59,6 +60,20 @@ satu per satu, masing-masing dengan palet warnanya sendiri.
 |:---:|:---:|
 | ![Peta NDWI](docs/03_peta_ndwi.png) | ![Peta NDCI](docs/04_peta_ndci.png) |
 
+Selain gradasi kontinu, setiap indeks dapat ditampilkan sebagai **klasifikasi
+empat kelas** melalui layer berakhiran "Kelas" pada panel layer (mis.
+`NDVI Kelas`). Tampilan kontinu dan kelas untuk indeks yang sama saling
+eksklusif: menyalakan salah satu otomatis mematikan yang lain, dan legenda
+menyesuaikan sendiri.
+
+| NDVI Kelas — kerapatan vegetasi | NDBI Kelas — kepadatan terbangun |
+|:---:|:---:|
+| ![NDVI kelas](docs/09_peta_ndvi_kelas.png) | ![NDBI kelas](docs/10_peta_ndbi_kelas.png) |
+
+| NDWI Kelas — kebasahan permukaan | NDCI Kelas — tutupan awan |
+|:---:|:---:|
+| ![NDWI kelas](docs/11_peta_ndwi_kelas.png) | ![NDCI kelas](docs/12_peta_ndci_kelas.png) |
+
 Popup nilai per kecamatan, tab **Statistik Zonal**, jendela **Tentang**, serta
 tampilan pada perangkat bergerak:
 
@@ -77,6 +92,9 @@ tampilan pada perangkat bergerak:
   satelit Esri World Imagery.
 - **Empat indeks spektral** yang dapat dinyalakan satu per satu (NDVI, NDBI,
   NDWI, NDCI) dengan palet warna berbeda.
+- **Mode klasifikasi 4 kelas** untuk setiap indeks (`NDVI Kelas`, `NDBI Kelas`,
+  `NDWI Kelas`, `NDCI Kelas`) dengan legenda kategori. Mode kontinu dan kelas
+  pada indeks yang sama saling eksklusif, sehingga peta tidak pernah bertumpuk.
 - **Overlay batas & nama kecamatan** yang dapat dinyalakan/dimatikan secara
   mandiri tanpa mengganggu indeks.
 - **Popup nilai per kecamatan** dan **sorotan wilayah** langsung dari peta.
@@ -121,7 +139,7 @@ tampilan pada perangkat bergerak:
 ├─ tubes.R        # Praproses: hitung indeks + statistik zonal dari citra
 ├─ utils.R        # Fungsi bantu murni (dipakai app.R & diuji di tests/)
 ├─ tests/         # Pengujian unit testthat
-├─ docs/          # Tangkapan layar lengkap (8 gambar) untuk dokumentasi
+├─ docs/          # Tangkapan layar lengkap (12 gambar) untuk dokumentasi
 ├─ scripts/       # Script bantu (deployment shinyapps.io)
 ├─ README.md      # Dokumentasi proyek
 ├─ CHANGELOG.md   # Riwayat perubahan

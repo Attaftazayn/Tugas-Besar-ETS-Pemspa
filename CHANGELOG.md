@@ -12,6 +12,8 @@ dan nomor versi mengikuti [Semantic Versioning](https://semver.org/id/spec/v2.0.
 - Kolom **Luas (ha)** pada tooltip/popup dan tabel statistik zonal.
 - Modal **Tentang** berisi metadata citra, rumus indeks, dan penulis.
 - Klasifikasi indeks (kelas) dengan legenda kategori.
+- Layer klasifikasi terpisah di panel layer (`NDVI Kelas`, `NDBI Kelas`,
+  `NDWI Kelas`, `NDCI Kelas`) yang saling eksklusif dengan versi kontinu.
 - Spinner CSS saat raster dimuat serta dukungan layar kecil (responsif).
 - Perpindahan ke kecamatan pilihan pada peta saat diklik dari grafik/tabel.
 - `CHANGELOG.md` dan templat laporan isu GitHub.

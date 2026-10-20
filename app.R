@@ -234,6 +234,62 @@ palet_indeks <- Map(
 )
 
 # =============================================================================
+# 3b. KELAS INDEKS (tampilan klasifikasi)
+# -----------------------------------------------------------------------------
+# Selain gradasi kontinu, tiap indeks bisa ditampilkan sebagai 4 kelas warna
+# tegas. Di peta, versi kelas menjadi layer TERPISAH, misalnya "NDVI Kelas",
+# sehingga pengguna dapat membandingkan kontinu vs kelas lewat panel layer.
+# Batas kelas bersifat (batas[i], batas[i+1]].
+# =============================================================================
+
+kelas_indeks <- list(
+  NDVI = list(
+    batas = c(-1, 0.2, 0.4, 0.6, 1),
+    label = c("Non-vegetasi (< 0,2)",
+              "Vegetasi jarang (0,2 - 0,4)",
+              "Vegetasi sedang (0,4 - 0,6)",
+              "Vegetasi rapat (> 0,6)"),
+    warna = c("#d73027", "#f4a300", "#a6d96a", "#1a9641")),
+  NDBI = list(
+    batas = c(-1, -0.1, 0.1, 0.3, 1),
+    label = c("Vegetasi / perairan (< -0,1)",
+              "Lahan campuran (-0,1 - 0,1)",
+              "Terbangun sedang (0,1 - 0,3)",
+              "Terbangun rapat (> 0,3)"),
+    warna = c("#1a9641", "#a6d96a", "#f4a300", "#d73027")),
+  NDWI = list(
+    batas = c(-1, -0.2, 0.2, 0.5, 1),
+    label = c("Daratan kering (< -0,2)",
+              "Lembap / tergenang (-0,2 - 0,2)",
+              "Air dangkal (0,2 - 0,5)",
+              "Air luas (> 0,5)"),
+    warna = c("#a66a00", "#e8d08a", "#74a9cf", "#08306b")),
+  NDCI = list(
+    batas = c(-1, -0.5, -0.3, -0.1, 1),
+    label = c("Awan sangat rendah (< -0,5)",
+              "Awan rendah (-0,5 - -0,3)",
+              "Awan sedang (-0,3 - -0,1)",
+              "Awan tinggi (> -0,1)"),
+    warna = c("#fff7bc", "#a1dab4", "#41b6c4", "#0c2c84"))
+)
+
+# Palet colorBin (warna kategori tegas) untuk tiap indeks
+palet_kelas <- Map(
+  f = function(nama) {
+    colorBin(
+      palette  = kelas_indeks[[nama]]$warna,
+      bins     = kelas_indeks[[nama]]$batas,
+      na.color = "#00000000",
+      alpha    = TRUE
+    )
+  },
+  nama = names(kelas_indeks)
+)
+
+# Nama group pada panel layer: "NDVI" (kontinu) dan "NDVI Kelas" (klasifikasi)
+grup_raster <- c(names(meta_indeks), paste(names(meta_indeks), "Kelas"))
+
+# =============================================================================
 # 4. MEMUAT BATAS ADMINISTRASI (vektor)
 # -----------------------------------------------------------------------------
 # GeoJSON sudah dalam EPSG:4326 (lon/lat) sehingga siap dipakai Leaflet
@@ -621,6 +677,11 @@ ui <- dashboardPage(
           )
         ),
         tags$div(
+          class = "help-mini",
+          "Panel layer di kanan atas: centang indeks kontinu (mis. NDVI) atau ",
+          "versi klasifikasi 4 kelas (mis. NDVI Kelas)."
+        ),
+        tags$div(
           class = "map-card",
           leafletOutput("peta", height = "100%")
         )
@@ -756,7 +817,25 @@ server <- function(input, output, session) {
         )
     }
     
-    # --- 7.1.2 Batas kecamatan, layer control, legenda, dan fokus wilayah ---
+    # --- 7.1.2 Overlay raster versi KELAS (klasifikasi) ---
+    # Versi kelas memakai palet colorBin (4 kategori warna tegas). Nama group
+    # ditambah akhiran " Kelas" agar muncul sebagai centang terpisah di panel
+    # layer, misalnya "NDVI Kelas".
+    for (nama in names(raster_indeks)) {
+      peta <- peta %>%
+        addRasterImage(
+          x        = raster_indeks[[nama]],
+          colors   = palet_kelas[[nama]],
+          project  = FALSE,
+          group    = paste(nama, "Kelas"),
+          opacity  = 0.85,
+          layerId  = paste0(nama, "_kelas"),
+          maxBytes = 12 * 1024^2,
+          method   = "bilinear"
+        )
+    }
+    
+    # --- 7.1.3 Batas kecamatan, layer control, legenda, dan fokus wilayah ---
     peta <- peta %>%
       
       # Batas kecamatan: hanya garis tepi (tanpa isi).
@@ -794,13 +873,15 @@ server <- function(input, output, session) {
         group = "Nama Kecamatan"
       ) %>%
       
-      # Tampilkan NDVI saja di awal, indeks lain disembunyikan
-      hideGroup(setdiff(names(meta_indeks), "NDVI")) %>%
+      # Tampilkan NDVI saja di awal; versi kontinu lain & semua versi kelas
+      # disembunyikan agar peta tidak bertumpuk saat pertama dibuka.
+      hideGroup(c(setdiff(names(meta_indeks), "NDVI"),
+                  paste(names(meta_indeks), "Kelas"))) %>%
       
       # Pengontrol basemap + toggle overlay
       addLayersControl(
         baseGroups = grup_basemap,
-        overlayGroups = c("Nama Kecamatan", names(meta_indeks), "Batas Kecamatan"),
+        overlayGroups = c("Nama Kecamatan", grup_raster, "Batas Kecamatan"),
         options = layersControlOptions(collapsed = FALSE, position = "topright")
       ) %>%
       
@@ -850,10 +931,25 @@ server <- function(input, output, session) {
     grup <- input$peta_groups
     if (is.null(grup)) grup <- character(0)
     
-    raster_aktif <- intersect(names(meta_indeks), grup)
+    # Layer raster yang BARU dinyalakan pengguna
+    grup_baru <- intersect(intersect(grup_raster, grup),
+                           setdiff(grup, state$grup_lama))
     
-    # Layer raster yang baru saja dinyalakan pengguna
-    grup_baru <- intersect(raster_aktif, setdiff(grup, state$grup_lama))
+    # --- Eksklusivitas mode: satu indeks hanya tampil dalam SATU mode ---
+    # Menyalakan "NDVI Kelas" otomatis mematikan "NDVI", dan sebaliknya.
+    # Dengan begitu tidak ada dua raster yang menumpuk untuk indeks yang sama.
+    if (length(grup_baru) > 0) {
+      lawan <- ifelse(grepl(" Kelas$", grup_baru),
+                      sub(" Kelas$", "", grup_baru),
+                      paste(grup_baru, "Kelas"))
+      lawan <- intersect(lawan, grup)          # hanya yang sedang tampil
+      if (length(lawan) > 0) {
+        leafletProxy("peta") %>% hideGroup(lawan)
+        grup <- setdiff(grup, lawan)
+      }
+    }
+    
+    raster_aktif <- intersect(grup_raster, grup)
     
     acuan <- if (length(grup_baru) > 0) {
       grup_baru[1]                                  # ikuti layer terakhir aktif
@@ -874,15 +970,33 @@ server <- function(input, output, session) {
     proxy <- leafletProxy("peta") %>% clearControls()   # hapus legenda lama
     
     if (!is.null(acuan)) {
-      proxy %>%
-        addLegend(
-          position  = "bottomright",
-          pal       = palet_indeks[[acuan]],
-          values    = rentang_indeks[[acuan]],
-          title     = meta_indeks[[acuan]]$label,
-          labFormat = labelFormat(digits = 2),
-          opacity   = 0.9
-        )
+      # acuan berbentuk "NDVI" (kontinu) atau "NDVI Kelas" (klasifikasi)
+      mode_kelas  <- grepl(" Kelas$", acuan)
+      nama_indeks <- sub(" Kelas$", "", acuan)
+      
+      if (mode_kelas) {
+        # Legenda kelas: kategori tegas beserta nama kelasnya
+        k <- kelas_indeks[[nama_indeks]]
+        proxy %>%
+          addLegend(
+            position = "bottomright",
+            colors   = k$warna,
+            labels   = k$label,
+            title    = paste0(meta_indeks[[nama_indeks]]$label, " (kelas)"),
+            opacity  = 0.9
+          )
+      } else {
+        # Legenda kontinu: gradasi warna
+        proxy %>%
+          addLegend(
+            position  = "bottomright",
+            pal       = palet_indeks[[nama_indeks]],
+            values    = rentang_indeks[[nama_indeks]],
+            title     = meta_indeks[[nama_indeks]]$label,
+            labFormat = labelFormat(digits = 2),
+            opacity   = 0.9
+          )
+      }
     }
     
     # Catatan: clearControls() hanya menghapus legenda, sedangkan

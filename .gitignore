@@ -7,6 +7,7 @@ output/*
 # Berkas sesi & konfigurasi R
 .RData
 .Rhistory
+.RDataTmp
 .Rproj.user/
 .Rproj
 
@@ -16,3 +17,4 @@ Bab3_Metodologi_WebGIS.docx
 Bab3_Metodologi_WebGIS.html
 Bab4/
 metodologi_webgis.docx
+New folder/
