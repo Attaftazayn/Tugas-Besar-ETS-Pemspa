@@ -14,6 +14,12 @@ output/*
 # Hasil knit R Markdown (cukup sumber .Rmd yang disimpan)
 Presentasi_app.html
 
+# Keluaran grafik dari eksperimen tubes.R (bisa dibuat ulang)
+ndci_plot*
+
+# Status deployment shinyapps.io (dibuat otomatis oleh rsconnect)
+rsconnect/
+
 # Dokumen laporan (di luar cakupan repositori proyek ini)
 Bab3_Metodologi_WebGIS.Rmd
 Bab3_Metodologi_WebGIS.docx
